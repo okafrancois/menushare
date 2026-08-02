@@ -123,6 +123,7 @@ export function createItem(input: {
   reviewCount?: number;
   reviewQuote?: string;
   reviewAuthor?: string;
+  images?: MenuImage[];
 }): MenuItem {
   return {
     id: input.id,
@@ -131,7 +132,7 @@ export function createItem(input: {
     details: input.details?.trim() ?? "",
     priceCents: parsePriceToCents(input.price),
     available: true,
-    images: [],
+    images: input.images ?? [],
     video: input.videoUrl?.trim()
       ? normalizeExternalVideoUrl(input.videoUrl)
       : undefined,
@@ -273,6 +274,13 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             reviewQuote:
               "Une burrata d’une fraîcheur incroyable, comme en Italie.",
             reviewAuthor: "Chiara F.",
+            images: [
+              {
+                id: "burrata-cover",
+                dataUrl: "/demo-burrata.jpg",
+                alt: "Burrata Pugliese, tomates marinées et basilic",
+              },
+            ],
           }),
           createItem({
             id: "vitello",

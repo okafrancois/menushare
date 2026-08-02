@@ -16,6 +16,7 @@ import { useQuery } from "convex/react";
 
 import {
   formatPrice,
+  createDemoState,
   type ExternalVideo,
   type MenuItem,
   type MenuSnapshot,
@@ -196,6 +197,9 @@ function RemotePublicMenu({ slug }: { slug: string }) {
   }
   const snapshot = toPublicSnapshot(result);
   if (!snapshot) {
+    if (slug === "nonna-lydie") {
+      return <PublishedMenu snapshot={createDemoState().published!} />;
+    }
     return (
       <main className="public-not-found">
         <span className="eyebrow">Menu indisponible</span>
