@@ -140,7 +140,13 @@ test("onboarding puis création complète d’un menu publié", async ({ page })
   await expect(
     page.getByText("Œufs pochés, brioche et sauce hollandaise."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Voir Œufs bénédicte" }).click();
+  const publicShell = page.locator("main.public-menu");
+  expect((await publicShell.boundingBox())?.width).toBe(448);
+  const dishCard = page.getByRole("button", { name: "Voir Œufs bénédicte" });
+  const dishCardBox = await dishCard.boundingBox();
+  expect(dishCardBox?.height).toBe(122);
+  expect(dishCardBox?.width).toBe(408);
+  await dishCard.click();
   await expect(
     page.getByRole("dialog").getByRole("img", { name: "oeufs.svg" }),
   ).toBeVisible();
@@ -155,6 +161,10 @@ test("onboarding puis création complète d’un menu publié", async ({ page })
   await expect(page.getByRole("dialog")).toContainText(
     "Le brunch parfait du dimanche.",
   );
+  await expect(page.getByRole("button", { name: "Commander" })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Appeler le serveur" }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Média suivant" }).click();
   await expect(
     page.getByRole("dialog").getByRole("img", { name: "oeufs-detail.svg" }),
@@ -268,6 +278,9 @@ test("menu public mobile, galerie vidéo et page inconnue", async ({ page }) => 
   await expect(
     page.getByRole("heading", { name: "Nonna Lydie" }),
   ).toBeVisible();
+  expect((await page.locator("main.public-menu").boundingBox())?.width).toBe(
+    390,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth + 1,

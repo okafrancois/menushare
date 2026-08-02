@@ -3,6 +3,7 @@
 import {
   ChevronLeft,
   ChevronRight,
+  Clock3,
   MapPin,
   Phone,
   Play,
@@ -251,20 +252,6 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
           {venue.tagline ? (
             <p className="public-tagline">{venue.tagline}</p>
           ) : null}
-          <p className="public-description">{venue.description}</p>
-          <div className="public-meta">
-            {venue.address || venue.city ? (
-              <span>
-                <MapPin size={15} /> {venue.address || venue.city}
-              </span>
-            ) : null}
-            {venue.hours ? <span>{venue.hours}</span> : null}
-            {venue.phone ? (
-              <span>
-                <Phone size={15} /> {venue.phone}
-              </span>
-            ) : null}
-          </div>
         </div>
         {venue.coverVideo ? (
           <button
@@ -277,84 +264,119 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
           </button>
         ) : null}
       </header>
-      <nav className="public-nav" aria-label="Catégories du menu">
-        <div className="public-nav-inner">
-          {availableCategories.map((category) => (
-            <a href={`#${category.id}`} key={category.id}>
-              {category.name}
-            </a>
-          ))}
-        </div>
-      </nav>
-      <div className="public-content">
-        {availableCategories.length ? (
-          availableCategories.map((category) => (
-            <section
-              className="menu-category"
-              id={category.id}
-              key={category.id}
-            >
-              <header className="menu-category-header">
-                <span className="eyebrow">{category.eyebrow}</span>
-                <h2 className="serif">{category.name}</h2>
-              </header>
-              <div className="public-items-grid">
-                {category.items.map((item) => (
-                  <button
-                    className="public-item"
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelected(item)}
-                    aria-label={`Voir ${item.name}`}
-                  >
-                    <div
-                      className={`public-item-art${item.video ? " video" : ""}`}
-                      style={
-                        item.images[0]
-                          ? {
-                              backgroundImage: `url(${item.images[0].dataUrl})`,
-                              backgroundSize: "cover",
-                              backgroundPosition: "center",
-                            }
-                          : undefined
-                      }
-                      aria-label={
-                        item.video
-                          ? `Vidéo ${item.video.provider}`
-                          : item.images.length
-                            ? "Image du plat"
-                            : "Illustration du plat"
-                      }
-                    />
-                    <div className="public-item-copy">
-                      <div>
-                        <h3>{item.name}</h3>
-                        <p>{item.description}</p>
-                      </div>
-                      <span className="public-item-price">
-                        {formatPrice(item.priceCents)}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))
-        ) : (
-          <div className="empty-state">
-            <h2 className="serif">Le menu arrive bientôt.</h2>
+      <div className="public-page-body">
+        {venue.description ||
+        venue.address ||
+        venue.city ||
+        venue.hours ||
+        venue.phone ? (
+          <section
+            className="public-venue-card"
+            aria-label="Informations de l’établissement"
+          >
+            {venue.description ? (
+              <p className="public-description">{venue.description}</p>
+            ) : null}
+            {venue.address || venue.city || venue.hours || venue.phone ? (
+              <ul className="public-meta">
+                {venue.address || venue.city ? (
+                  <li>
+                    <MapPin size={16} />{" "}
+                    <span>{venue.address || venue.city}</span>
+                  </li>
+                ) : null}
+                {venue.hours ? (
+                  <li>
+                    <Clock3 size={16} /> <span>{venue.hours}</span>
+                  </li>
+                ) : null}
+                {venue.phone ? (
+                  <li>
+                    <Phone size={16} />
+                    <a href={`tel:${venue.phone.replace(/\s/g, "")}`}>
+                      {venue.phone}
+                    </a>
+                  </li>
+                ) : null}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+        <nav className="public-nav" aria-label="Catégories du menu">
+          <div className="public-nav-inner">
+            {availableCategories.map((category) => (
+              <a href={`#${category.id}`} key={category.id}>
+                {category.name}
+              </a>
+            ))}
           </div>
-        )}
+        </nav>
+        <div className="public-content">
+          {availableCategories.length ? (
+            availableCategories.map((category) => (
+              <section
+                className="menu-category"
+                id={category.id}
+                key={category.id}
+              >
+                <header className="menu-category-header">
+                  <span className="eyebrow">{category.eyebrow}</span>
+                  <h2 className="serif">{category.name}</h2>
+                </header>
+                <div className="public-items-grid">
+                  {category.items.map((item) => (
+                    <button
+                      className="public-item"
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelected(item)}
+                      aria-label={`Voir ${item.name}`}
+                    >
+                      <div
+                        className={`public-item-art${item.video ? " video" : ""}`}
+                        style={
+                          item.images[0]
+                            ? {
+                                backgroundImage: `url(${item.images[0].dataUrl})`,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                              }
+                            : undefined
+                        }
+                        aria-label={
+                          item.video
+                            ? `Vidéo ${item.video.provider}`
+                            : item.images.length
+                              ? "Image du plat"
+                              : "Illustration du plat"
+                        }
+                      />
+                      <div className="public-item-copy">
+                        <div>
+                          <h3>{item.name}</h3>
+                          <p>{item.description}</p>
+                        </div>
+                        <span className="public-item-price">
+                          {formatPrice(item.priceCents)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))
+          ) : (
+            <div className="empty-state">
+              <h2 className="serif">Le menu arrive bientôt.</h2>
+            </div>
+          )}
+        </div>
+        <footer className="public-footer">
+          {venue.name} · Menu propulsé par MenuShare
+        </footer>
       </div>
-      <footer className="public-footer">
-        {venue.name} · Menu propulsé par MenuShare
-      </footer>
       {selected ? (
-        <ItemMediaModal
-          item={selected}
-          phone={venue.phone}
-          onClose={() => setSelected(null)}
-        />
+        <ItemMediaModal item={selected} onClose={() => setSelected(null)} />
       ) : null}
       {coverVideoOpen && venue.coverVideo ? (
         <VideoModal
@@ -369,11 +391,9 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
 
 function ItemMediaModal({
   item,
-  phone,
   onClose,
 }: {
   item: MenuItem;
-  phone: string;
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -412,6 +432,7 @@ function ItemMediaModal({
           <X />
         </button>
         <div className="dish-sheet-media">
+          {showingVideo ? <span className="dish-media-type">Vidéo</span> : null}
           {showingVideo && item.video ? (
             <VideoFrame title={item.name} video={item.video} />
           ) : item.images[index] ? (
@@ -456,7 +477,6 @@ function ItemMediaModal({
             </div>
           ) : null}
           <div className="dish-media-title">
-            {showingVideo ? <span className="eyebrow">Vidéo</span> : null}
             <h2 className="serif" id="public-item-title">
               {item.name}
             </h2>
@@ -517,16 +537,6 @@ function ItemMediaModal({
               {item.reviewAuthor ? <cite>{item.reviewAuthor}</cite> : null}
             </section>
           ) : null}
-          <div className="dish-sheet-actions">
-            <button className="button button-primary" type="button">
-              Commander
-            </button>
-            {phone ? (
-              <a className="button" href={`tel:${phone.replace(/\s/g, "")}`}>
-                Appeler le serveur
-              </a>
-            ) : null}
-          </div>
         </div>
       </section>
     </div>
