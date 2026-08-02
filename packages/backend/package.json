@@ -1,0 +1,26 @@
+{
+  "name": "@repo/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": "./api.js",
+    "./video": "./convex/lib/video.ts"
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@convex-dev/better-auth": "^0.12.1",
+    "better-auth": "^1.6.9",
+    "convex": "^1.36.1",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "5.9.2",
+    "vitest": "^4.1.7"
+  }
+}
