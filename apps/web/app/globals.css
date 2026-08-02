@@ -108,11 +108,11 @@ button {
 }
 .brand small {
   display: block;
-  color: var(--muted);
+  color: #5b5047;
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 .header-nav {
@@ -353,6 +353,9 @@ button {
 .auth-art p {
   max-width: 540px;
   color: rgba(255, 255, 255, 0.75);
+}
+.auth-art .brand small {
+  color: rgba(255, 255, 255, 0.86);
 }
 .auth-main {
   display: grid;

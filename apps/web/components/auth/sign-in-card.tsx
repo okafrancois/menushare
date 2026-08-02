@@ -2,9 +2,11 @@
 
 import { ArrowLeft, ArrowRight, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { signedInDestination } from "@/lib/auth-navigation";
+import { useMenuStore } from "@/lib/menu-store";
 
 type Step = "email" | "otp";
 type SocialProvider = "google" | "apple";
@@ -26,11 +28,27 @@ function messageForAuthError(code?: string) {
 
 export function SignInCard() {
   const router = useRouter();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { state, hydrated, remote } = useMenuStore();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const authenticatedDestination = signedInDestination({
+    remote,
+    sessionPending,
+    hydrated,
+    hasSession: Boolean(session),
+    hasVenue: Boolean(state.venue.id),
+  });
+
+  useEffect(() => {
+    if (authenticatedDestination) {
+      router.replace(authenticatedDestination);
+    }
+  }, [authenticatedDestination, router]);
 
   const startSocial = async (provider: SocialProvider) => {
     setError(null);
@@ -44,7 +62,9 @@ export function SignInCard() {
     setPending(provider);
     const { error: authError } = await authClient.signIn.social({
       provider,
-      callbackURL: `${window.location.origin}/onboarding`,
+      callbackURL: "/onboarding",
+      newUserCallbackURL: "/onboarding",
+      errorCallbackURL: "/sign-in?error=oauth",
     });
     if (authError) {
       setError(messageForAuthError(authError.code));
@@ -87,6 +107,10 @@ export function SignInCard() {
     }
     router.push("/onboarding");
   };
+
+  if (authenticatedDestination) {
+    return <div className="public-loading">Ouverture de votre espace…</div>;
+  }
 
   return (
     <div className="auth-card">
