@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./api": "./api.js",
+    "./api": "./convex/_generated/api.js",
+    "./data-model": "./convex/_generated/dataModel.d.ts",
     "./video": "./convex/lib/video.ts"
   },
   "scripts": {

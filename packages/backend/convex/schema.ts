@@ -53,6 +53,7 @@ export default defineSchema({
     currency: v.string(),
     status: v.union(v.literal("draft"), v.literal("published")),
     version: v.number(),
+    updatedAt: v.number(),
     publishedSnapshotId: v.optional(v.id("menuSnapshots")),
     publishedAt: v.optional(v.number()),
   }).index("by_venue", ["venueId"]),

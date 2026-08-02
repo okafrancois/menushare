@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedVenueOrThrow } from "./lib/auth";
 import { normalizeExternalVideoUrl } from "./lib/video";
 import { mutation, query } from "./server";
@@ -31,15 +33,36 @@ function assertSlug(slug: string) {
   }
 }
 
+async function touchVenueMenu(ctx: MutationCtx, venueId: Id<"venues">) {
+  const menu = await ctx.db
+    .query("menus")
+    .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+    .unique();
+  if (menu) {
+    await ctx.db.patch(menu._id, { status: "draft", updatedAt: Date.now() });
+  }
+}
+
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
     const user = await currentUserOrThrow(ctx);
-    return await ctx.db
+    const venues = await ctx.db
       .query("venues")
-      .withIndex("by_owner", (q: any) => q.eq("ownerId", user._id))
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
       .order("desc")
-      .collect();
+      .take(20);
+    return await Promise.all(
+      venues.map(async (venue) => ({
+        venue,
+        menuId: (
+          await ctx.db
+            .query("menus")
+            .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
+            .unique()
+        )?._id,
+      })),
+    );
   },
 });
 
@@ -52,11 +75,11 @@ export const checkSlug = query({
     }
     const venue = await ctx.db
       .query("venues")
-      .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
     const history = await ctx.db
       .query("slugHistory")
-      .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
     return { slug, available: !venue && !history };
   },
@@ -76,11 +99,11 @@ export const create = mutation({
 
     const existing = await ctx.db
       .query("venues")
-      .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
     const reserved = await ctx.db
       .query("slugHistory")
-      .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
     if (existing || reserved) throw new Error("SLUG_UNAVAILABLE");
 
@@ -101,6 +124,7 @@ export const create = mutation({
       currency: "EUR",
       status: "draft",
       version: 0,
+      updatedAt: Date.now(),
     });
 
     return { venueId, menuId, slug };
@@ -123,6 +147,7 @@ export const updateProfile = mutation({
   handler: async (ctx, { venueId, ...patch }) => {
     await ownedVenueOrThrow(ctx, venueId);
     await ctx.db.patch(venueId, patch);
+    await touchVenueMenu(ctx, venueId);
   },
 });
 
@@ -161,6 +186,7 @@ export const updateAppearance = mutation({
       patch.coverVideoEmbedUrl = video.embedUrl;
     }
     await ctx.db.patch(args.venueId, patch);
+    await touchVenueMenu(ctx, args.venueId);
   },
 });
 
@@ -182,17 +208,17 @@ export const changeSlug = mutation({
 
     const existingVenue = await ctx.db
       .query("venues")
-      .withIndex("by_slug", (q: any) => q.eq("slug", nextSlug))
+      .withIndex("by_slug", (q) => q.eq("slug", nextSlug))
       .unique();
     const existingHistory = await ctx.db
       .query("slugHistory")
-      .withIndex("by_slug", (q: any) => q.eq("slug", nextSlug))
+      .withIndex("by_slug", (q) => q.eq("slug", nextSlug))
       .unique();
     if (existingVenue || existingHistory) throw new Error("SLUG_UNAVAILABLE");
 
     const oldHistory = await ctx.db
       .query("slugHistory")
-      .withIndex("by_slug", (q: any) => q.eq("slug", venue.slug))
+      .withIndex("by_slug", (q) => q.eq("slug", venue.slug))
       .unique();
     if (oldHistory) {
       await ctx.db.patch(oldHistory._id, {
@@ -207,6 +233,7 @@ export const changeSlug = mutation({
       active: true,
     });
     await ctx.db.patch(venueId, { slug: nextSlug });
+    await touchVenueMenu(ctx, venueId);
     return nextSlug;
   },
 });

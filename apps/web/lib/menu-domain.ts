@@ -179,6 +179,26 @@ export function createVenueState(input: {
   };
 }
 
+export function createEmptyState(now = Date.now()): MenuState {
+  return {
+    venue: {
+      id: "",
+      slug: "votre-menu",
+      name: "Votre établissement",
+      kind: "Restaurant",
+      city: "",
+      tagline: "Une cuisine à découvrir.",
+      description: "",
+      address: "",
+      phone: "",
+      hours: "",
+      accentColor: "#76263c",
+    },
+    categories: [],
+    changedAt: now,
+  };
+}
+
 export function createDemoState(now = 1_786_000_000_000): MenuState {
   const state: MenuState = {
     venue: {

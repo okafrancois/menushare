@@ -4,18 +4,13 @@ import { betterAuth } from "better-auth/minimal";
 import { emailOTP } from "better-auth/plugins";
 import type { DataModelFromSchemaDefinition } from "convex/server";
 
-import { components } from "../api";
+import { components } from "../_generated/api";
 import authConfig from "../auth.config";
 import schema from "../schema";
 
 type DataModel = DataModelFromSchemaDefinition<typeof schema>;
 
-// `componentsGeneric()` keeps the starter usable before the first Convex
-// codegen. Convex replaces this loose component reference with generated
-// types as soon as `convex dev` is configured.
-export const authComponent = createClient<DataModel>(
-  components.betterAuth as any,
-);
+export const authComponent = createClient<DataModel>(components.betterAuth);
 
 function socialProviders() {
   const providers: Record<string, { clientId: string; clientSecret: string }> =

@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties } from "react";
+import { api } from "@repo/backend/api";
+import { useQuery } from "convex/react";
 
 import {
   formatPrice,
@@ -18,8 +20,14 @@ import {
   type MenuSnapshot,
 } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
+import { convex } from "@/lib/convex";
 
 export function PublicMenu({ slug }: { slug: string }) {
+  if (convex) return <RemotePublicMenu slug={slug} />;
+  return <LocalPublicMenu slug={slug} />;
+}
+
+function LocalPublicMenu({ slug }: { slug: string }) {
   const { state, hydrated } = useMenuStore();
   const snapshot =
     state.published?.venue.slug === slug ? state.published : undefined;
@@ -37,6 +45,151 @@ export function PublicMenu({ slug }: { slug: string }) {
         </Link>
       </main>
     );
+  return <PublishedMenu snapshot={snapshot} />;
+}
+
+type PublishedPayload = {
+  venue: {
+    _id: string;
+    slug: string;
+    name: string;
+    kind: string;
+    city?: string;
+    tagline?: string;
+    description?: string;
+    address?: string;
+    phone?: string;
+    hours?: string;
+    accentColor?: string;
+    logoUrl?: string | null;
+    coverImageUrl?: string | null;
+    coverVideoProvider?: "youtube" | "vimeo";
+    coverVideoExternalId?: string;
+    coverVideoEmbedUrl?: string;
+  };
+  menu: { version: number; publishedAt?: number };
+  categories: Array<{
+    _id: string;
+    name: string;
+    eyebrow?: string;
+    items: Array<{
+      _id: string;
+      name: string;
+      description?: string;
+      priceCents: number;
+      active: boolean;
+      media: Array<{
+        _id: string;
+        kind: "image" | "externalVideo";
+        imageUrl?: string | null;
+        alt?: string;
+        provider?: "youtube" | "vimeo";
+        externalId?: string;
+        embedUrl?: string;
+      }>;
+    }>;
+  }>;
+};
+
+function toPublicSnapshot(value: unknown): MenuSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<PublishedPayload>;
+  if (
+    !candidate.venue ||
+    !candidate.menu ||
+    !Array.isArray(candidate.categories)
+  ) {
+    return null;
+  }
+  const rawVenue = candidate.venue;
+  if (!rawVenue._id || !rawVenue.slug || !rawVenue.name) return null;
+  const venue = {
+    id: rawVenue._id,
+    slug: rawVenue.slug,
+    name: rawVenue.name,
+    kind: rawVenue.kind || "Restaurant",
+    city: rawVenue.city ?? "",
+    tagline: rawVenue.tagline ?? "",
+    description: rawVenue.description ?? "",
+    address: rawVenue.address ?? "",
+    phone: rawVenue.phone ?? "",
+    hours: rawVenue.hours ?? "",
+    accentColor: rawVenue.accentColor ?? "#76263c",
+    logoDataUrl: rawVenue.logoUrl ?? undefined,
+    coverImageDataUrl: rawVenue.coverImageUrl ?? undefined,
+    coverVideo:
+      rawVenue.coverVideoProvider &&
+      rawVenue.coverVideoExternalId &&
+      rawVenue.coverVideoEmbedUrl
+        ? {
+            provider: rawVenue.coverVideoProvider,
+            externalId: rawVenue.coverVideoExternalId,
+            embedUrl: rawVenue.coverVideoEmbedUrl,
+          }
+        : undefined,
+  };
+  const categories = candidate.categories.map((category) => ({
+    id: category._id,
+    name: category.name,
+    eyebrow: category.eyebrow ?? "",
+    items: category.items.map((item) => {
+      const video = item.media.find(
+        (asset) =>
+          asset.kind === "externalVideo" &&
+          asset.provider &&
+          asset.externalId &&
+          asset.embedUrl,
+      );
+      return {
+        id: item._id,
+        name: item.name,
+        description: item.description ?? "",
+        priceCents: item.priceCents,
+        available: item.active,
+        images: item.media
+          .filter((asset) => asset.kind === "image" && asset.imageUrl)
+          .map((asset) => ({
+            id: asset._id,
+            dataUrl: asset.imageUrl!,
+            alt: asset.alt ?? item.name,
+          })),
+        video:
+          video?.provider && video.externalId && video.embedUrl
+            ? {
+                provider: video.provider,
+                externalId: video.externalId,
+                embedUrl: video.embedUrl,
+              }
+            : undefined,
+      };
+    }),
+  }));
+  return {
+    venue,
+    categories,
+    publishedAt: candidate.menu.publishedAt ?? Date.now(),
+    version: candidate.menu.version,
+  };
+}
+
+function RemotePublicMenu({ slug }: { slug: string }) {
+  const result: unknown = useQuery(api.menus.getPublishedBySlug, { slug });
+  if (result === undefined) {
+    return <main className="public-loading">Chargement du menu…</main>;
+  }
+  const snapshot = toPublicSnapshot(result);
+  if (!snapshot) {
+    return (
+      <main className="public-not-found">
+        <span className="eyebrow">Menu indisponible</span>
+        <h1 className="serif">Cette table est encore vide.</h1>
+        <p>Ce menu n’existe pas ou n’a pas encore été publié.</p>
+        <Link className="button button-primary" href="/">
+          Retour à MenuShare
+        </Link>
+      </main>
+    );
+  }
   return <PublishedMenu snapshot={snapshot} />;
 }
 

@@ -7,7 +7,7 @@ import { slugify, validateSlug } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
 
 export default function SettingsPage() {
-  const { state, updateVenue, resetDemo } = useMenuStore();
+  const { state, updateVenue, resetDemo, remote } = useMenuStore();
   const [form, setForm] = useState(state.venue);
   const [saved, setSaved] = useState(false);
   const slugError = validateSlug(form.slug);
@@ -135,25 +135,27 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
-      <section className="danger-zone">
-        <div>
-          <h2>Réinitialiser le mode démo</h2>
-          <p>
-            Remet les données locales de Nonna Lydie. Cette action remplace
-            votre brouillon actuel.
-          </p>
-        </div>
-        <button
-          className="button"
-          type="button"
-          onClick={() => {
-            if (confirm("Réinitialiser toutes les données locales ?"))
-              resetDemo();
-          }}
-        >
-          <RotateCcw size={16} /> Réinitialiser
-        </button>
-      </section>
+      {!remote ? (
+        <section className="danger-zone">
+          <div>
+            <h2>Réinitialiser le mode démo</h2>
+            <p>
+              Remet les données locales de Nonna Lydie. Cette action remplace
+              votre brouillon actuel.
+            </p>
+          </div>
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              if (confirm("Réinitialiser toutes les données locales ?"))
+                resetDemo();
+            }}
+          >
+            <RotateCcw size={16} /> Réinitialiser
+          </button>
+        </section>
+      ) : null}
     </>
   );
 }

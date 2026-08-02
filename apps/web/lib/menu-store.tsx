@@ -23,39 +23,56 @@ import {
   STORAGE_KEY,
 } from "@/lib/menu-domain";
 
-type MenuStore = {
+type MaybePromise<T> = T | Promise<T>;
+
+export type MenuStore = {
   state: MenuState;
   hydrated: boolean;
+  remote: boolean;
   createVenue: (input: {
     name: string;
     slug: string;
     kind: string;
     city: string;
-  }) => void;
-  updateVenue: (patch: Partial<Venue>) => void;
-  addCategory: (input: { name: string; eyebrow: string }) => string;
-  updateCategory: (id: string, patch: Partial<MenuCategory>) => void;
-  deleteCategory: (id: string) => void;
-  moveCategory: (id: string, direction: -1 | 1) => void;
-  addItem: (categoryId: string, item: MenuItem) => void;
+  }) => MaybePromise<void>;
+  updateVenue: (patch: Partial<Venue>) => MaybePromise<void>;
+  addCategory: (input: {
+    name: string;
+    eyebrow: string;
+  }) => MaybePromise<string>;
+  updateCategory: (
+    id: string,
+    patch: Partial<MenuCategory>,
+  ) => MaybePromise<void>;
+  deleteCategory: (id: string) => MaybePromise<void>;
+  moveCategory: (id: string, direction: -1 | 1) => MaybePromise<void>;
+  addItem: (categoryId: string, item: MenuItem) => MaybePromise<void>;
   updateItem: (
     categoryId: string,
     id: string,
     patch: Partial<MenuItem>,
-  ) => void;
-  deleteItem: (categoryId: string, id: string) => void;
-  moveItem: (categoryId: string, id: string, direction: -1 | 1) => void;
-  addItemImage: (categoryId: string, itemId: string, image: MenuImage) => void;
+  ) => MaybePromise<void>;
+  deleteItem: (categoryId: string, id: string) => MaybePromise<void>;
+  moveItem: (
+    categoryId: string,
+    id: string,
+    direction: -1 | 1,
+  ) => MaybePromise<void>;
+  addItemImage: (
+    categoryId: string,
+    itemId: string,
+    image: MenuImage,
+  ) => MaybePromise<void>;
   removeItemImage: (
     categoryId: string,
     itemId: string,
     imageId: string,
-  ) => void;
-  publish: () => void;
-  resetDemo: () => void;
+  ) => MaybePromise<void>;
+  publish: () => MaybePromise<void>;
+  resetDemo: () => MaybePromise<void>;
 };
 
-const MenuStoreContext = createContext<MenuStore | null>(null);
+export const MenuStoreContext = createContext<MenuStore | null>(null);
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -89,6 +106,7 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
     return {
       state,
       hydrated,
+      remote: false,
       createVenue: (input) =>
         setState(createVenueState({ id: uid("venue"), ...input })),
       updateVenue: (patch) =>

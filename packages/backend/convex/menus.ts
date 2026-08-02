@@ -1,10 +1,12 @@
 import { v } from "convex/values";
 
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedMenuOrThrow } from "./lib/auth";
 import { normalizeExternalVideoUrl } from "./lib/video";
 import { mutation, query } from "./server";
 
-async function mediaWithUrl(ctx: any, media: any) {
+async function mediaWithUrl(ctx: QueryCtx | MutationCtx, media: Doc<"media">) {
   return {
     ...media,
     imageUrl: media.imageStorageId
@@ -13,33 +15,44 @@ async function mediaWithUrl(ctx: any, media: any) {
   };
 }
 
+async function touchMenu(ctx: MutationCtx, menuId: Id<"menus">) {
+  await ctx.db.patch(menuId, { status: "draft", updatedAt: Date.now() });
+}
+
+async function menuIdForItem(ctx: MutationCtx, itemId: Id<"menuItems">) {
+  const item = await ctx.db.get(itemId);
+  if (!item) throw new Error("NOT_FOUND");
+  const category = await ctx.db.get(item.categoryId);
+  if (!category) throw new Error("NOT_FOUND");
+  await ownedMenuOrThrow(ctx, category.menuId);
+  return { item, category, menuId: category.menuId };
+}
+
 export const getDraft = query({
   args: { menuId: v.id("menus") },
   handler: async (ctx, { menuId }) => {
     const { menu, venue } = await ownedMenuOrThrow(ctx, menuId);
     const categories = await ctx.db
       .query("categories")
-      .withIndex("by_menu_order", (q: any) => q.eq("menuId", menuId))
-      .collect();
+      .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
+      .take(100);
     const hydrated = await Promise.all(
-      categories.map(async (category: any) => {
+      categories.map(async (category) => {
         const items = await ctx.db
           .query("menuItems")
-          .withIndex("by_category_order", (q: any) =>
+          .withIndex("by_category_order", (q) =>
             q.eq("categoryId", category._id),
           )
-          .collect();
+          .take(200);
         return {
           ...category,
           items: await Promise.all(
-            items.map(async (item: any) => ({
+            items.map(async (item) => ({
               ...item,
               media: await ctx.db
                 .query("media")
-                .withIndex("by_item_order", (q: any) =>
-                  q.eq("itemId", item._id),
-                )
-                .collect(),
+                .withIndex("by_item_order", (q) => q.eq("itemId", item._id))
+                .take(20),
             })),
           ),
         };
@@ -57,13 +70,13 @@ export const getDraft = query({
       },
       menu,
       categories: await Promise.all(
-        hydrated.map(async (category: any) => ({
+        hydrated.map(async (category) => ({
           ...category,
           items: await Promise.all(
-            category.items.map(async (item: any) => ({
+            category.items.map(async (item) => ({
               ...item,
               media: await Promise.all(
-                item.media.map((asset: any) => mediaWithUrl(ctx, asset)),
+                item.media.map((asset) => mediaWithUrl(ctx, asset)),
               ),
             })),
           ),
@@ -83,15 +96,17 @@ export const addCategory = mutation({
     await ownedMenuOrThrow(ctx, args.menuId);
     const categories = await ctx.db
       .query("categories")
-      .withIndex("by_menu_order", (q: any) => q.eq("menuId", args.menuId))
-      .collect();
-    return await ctx.db.insert("categories", {
+      .withIndex("by_menu_order", (q) => q.eq("menuId", args.menuId))
+      .take(100);
+    const categoryId = await ctx.db.insert("categories", {
       menuId: args.menuId,
       name: args.name.trim(),
       eyebrow: args.eyebrow?.trim(),
       order: categories.length,
       active: true,
     });
+    await touchMenu(ctx, args.menuId);
+    return categoryId;
   },
 });
 
@@ -111,6 +126,7 @@ export const updateCategory = mutation({
       name: patch.name?.trim(),
       eyebrow: patch.eyebrow?.trim(),
     });
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -120,16 +136,17 @@ export const reorderCategories = mutation({
     await ownedMenuOrThrow(ctx, menuId);
     const categories = await ctx.db
       .query("categories")
-      .withIndex("by_menu_order", (q: any) => q.eq("menuId", menuId))
-      .collect();
+      .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
+      .take(100);
     if (
       categories.length !== categoryIds.length ||
-      categories.some((category: any) => !categoryIds.includes(category._id))
+      categories.some((category) => !categoryIds.includes(category._id))
     )
       throw new Error("INVALID_ORDER");
     await Promise.all(
       categoryIds.map((id, order) => ctx.db.patch(id, { order })),
     );
+    await touchMenu(ctx, menuId);
   },
 });
 
@@ -141,15 +158,13 @@ export const deleteCategory = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     const items = await ctx.db
       .query("menuItems")
-      .withIndex("by_category_order", (q: any) =>
-        q.eq("categoryId", categoryId),
-      )
-      .collect();
+      .withIndex("by_category_order", (q) => q.eq("categoryId", categoryId))
+      .take(200);
     for (const item of items) {
       const media = await ctx.db
         .query("media")
-        .withIndex("by_item_order", (q: any) => q.eq("itemId", item._id))
-        .collect();
+        .withIndex("by_item_order", (q) => q.eq("itemId", item._id))
+        .take(20);
       for (const asset of media) {
         if (asset.imageStorageId)
           await ctx.storage.delete(asset.imageStorageId);
@@ -158,6 +173,7 @@ export const deleteCategory = mutation({
       await ctx.db.delete(item._id);
     }
     await ctx.db.delete(categoryId);
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -174,11 +190,11 @@ export const addItem = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     const items = await ctx.db
       .query("menuItems")
-      .withIndex("by_category_order", (q: any) =>
+      .withIndex("by_category_order", (q) =>
         q.eq("categoryId", args.categoryId),
       )
-      .collect();
-    return await ctx.db.insert("menuItems", {
+      .take(200);
+    const itemId = await ctx.db.insert("menuItems", {
       categoryId: args.categoryId,
       name: args.name.trim(),
       description: args.description?.trim(),
@@ -186,6 +202,8 @@ export const addItem = mutation({
       order: items.length,
       active: true,
     });
+    await touchMenu(ctx, category.menuId);
+    return itemId;
   },
 });
 
@@ -198,11 +216,7 @@ export const updateItem = mutation({
     active: v.optional(v.boolean()),
   },
   handler: async (ctx, { itemId, ...patch }) => {
-    const item = await ctx.db.get(itemId);
-    if (!item) throw new Error("NOT_FOUND");
-    const category = await ctx.db.get(item.categoryId);
-    if (!category) throw new Error("NOT_FOUND");
-    await ownedMenuOrThrow(ctx, category.menuId);
+    const { menuId } = await menuIdForItem(ctx, itemId);
     await ctx.db.patch(itemId, {
       ...patch,
       name: patch.name?.trim(),
@@ -212,6 +226,7 @@ export const updateItem = mutation({
           ? undefined
           : Math.max(0, Math.round(patch.priceCents)),
     });
+    await touchMenu(ctx, menuId);
   },
 });
 
@@ -223,16 +238,15 @@ export const reorderItems = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     const items = await ctx.db
       .query("menuItems")
-      .withIndex("by_category_order", (q: any) =>
-        q.eq("categoryId", categoryId),
-      )
-      .collect();
+      .withIndex("by_category_order", (q) => q.eq("categoryId", categoryId))
+      .take(200);
     if (
       items.length !== itemIds.length ||
-      items.some((item: any) => !itemIds.includes(item._id))
+      items.some((item) => !itemIds.includes(item._id))
     )
       throw new Error("INVALID_ORDER");
     await Promise.all(itemIds.map((id, order) => ctx.db.patch(id, { order })));
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -246,13 +260,14 @@ export const deleteItem = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     const media = await ctx.db
       .query("media")
-      .withIndex("by_item_order", (q: any) => q.eq("itemId", itemId))
-      .collect();
+      .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
+      .take(20);
     for (const asset of media) {
       if (asset.imageStorageId) await ctx.storage.delete(asset.imageStorageId);
       await ctx.db.delete(asset._id);
     }
     await ctx.db.delete(itemId);
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -271,10 +286,10 @@ export const setExternalVideo = mutation({
 
     const existing = await ctx.db
       .query("media")
-      .withIndex("by_item_order", (q: any) => q.eq("itemId", itemId))
-      .collect();
+      .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
+      .take(20);
     const existingVideo = existing.find(
-      (media: any) => media.kind === "externalVideo",
+      (media) => media.kind === "externalVideo",
     );
     const data = {
       venueId: venue._id,
@@ -287,9 +302,12 @@ export const setExternalVideo = mutation({
     };
     if (existingVideo) {
       await ctx.db.patch(existingVideo._id, data);
+      await touchMenu(ctx, category.menuId);
       return existingVideo._id;
     }
-    return await ctx.db.insert("media", data);
+    const mediaId = await ctx.db.insert("media", data);
+    await touchMenu(ctx, category.menuId);
+    return mediaId;
   },
 });
 
@@ -303,13 +321,14 @@ export const removeExternalVideo = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     const media = await ctx.db
       .query("media")
-      .withIndex("by_item_order", (q: any) => q.eq("itemId", itemId))
-      .collect();
+      .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
+      .take(20);
     await Promise.all(
       media
-        .filter((asset: any) => asset.kind === "externalVideo")
-        .map((asset: any) => ctx.db.delete(asset._id)),
+        .filter((asset) => asset.kind === "externalVideo")
+        .map((asset) => ctx.db.delete(asset._id)),
     );
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -336,13 +355,13 @@ export const addItemImage = mutation({
     }
     const media = await ctx.db
       .query("media")
-      .withIndex("by_item_order", (q: any) => q.eq("itemId", itemId))
-      .collect();
-    if (media.filter((asset: any) => asset.kind === "image").length >= 8) {
+      .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
+      .take(20);
+    if (media.filter((asset) => asset.kind === "image").length >= 8) {
       await ctx.storage.delete(storageId);
       throw new Error("IMAGE_LIMIT_REACHED");
     }
-    return await ctx.db.insert("media", {
+    const mediaId = await ctx.db.insert("media", {
       venueId: venue._id,
       itemId,
       kind: "image",
@@ -350,6 +369,8 @@ export const addItemImage = mutation({
       alt: alt?.trim(),
       order: media.length,
     });
+    await touchMenu(ctx, category.menuId);
+    return mediaId;
   },
 });
 
@@ -365,6 +386,7 @@ export const removeMedia = mutation({
     await ownedMenuOrThrow(ctx, category.menuId);
     if (media.imageStorageId) await ctx.storage.delete(media.imageStorageId);
     await ctx.db.delete(mediaId);
+    await touchMenu(ctx, category.menuId);
   },
 });
 
@@ -375,8 +397,8 @@ export const publish = mutation({
     const { menu, venue } = await ownedMenuOrThrow(ctx, menuId);
     const categories = await ctx.db
       .query("categories")
-      .withIndex("by_menu_order", (q: any) => q.eq("menuId", menuId))
-      .collect();
+      .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
+      .take(100);
     const data = {
       venue: {
         ...venue,
@@ -389,27 +411,27 @@ export const publish = mutation({
       },
       menu,
       categories: await Promise.all(
-        categories.map(async (category: any) => {
+        categories.map(async (category) => {
           const items = await ctx.db
             .query("menuItems")
-            .withIndex("by_category_order", (q: any) =>
+            .withIndex("by_category_order", (q) =>
               q.eq("categoryId", category._id),
             )
-            .collect();
+            .take(200);
           return {
             ...category,
             items: await Promise.all(
-              items.map(async (item: any) => ({
+              items.map(async (item) => ({
                 ...item,
                 media: await Promise.all(
                   (
                     await ctx.db
                       .query("media")
-                      .withIndex("by_item_order", (q: any) =>
+                      .withIndex("by_item_order", (q) =>
                         q.eq("itemId", item._id),
                       )
-                      .collect()
-                  ).map((asset: any) => mediaWithUrl(ctx, asset)),
+                      .take(20)
+                  ).map((asset) => mediaWithUrl(ctx, asset)),
                 ),
               })),
             ),
@@ -431,6 +453,7 @@ export const publish = mutation({
     await ctx.db.patch(menuId, {
       status: "published",
       version,
+      updatedAt: publishedAt,
       publishedAt,
       publishedSnapshotId: snapshotId,
     });
@@ -444,29 +467,30 @@ export const getPublishedBySlug = query({
   handler: async (ctx, { slug }) => {
     let venue = await ctx.db
       .query("venues")
-      .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
     let redirectedFrom: string | undefined;
 
     if (!venue) {
       const history = await ctx.db
         .query("slugHistory")
-        .withIndex("by_slug", (q: any) => q.eq("slug", slug))
+        .withIndex("by_slug", (q) => q.eq("slug", slug))
         .unique();
       if (!history?.redirectedTo) return null;
+      const redirectSlug = history.redirectedTo;
       redirectedFrom = slug;
       venue = await ctx.db
         .query("venues")
-        .withIndex("by_slug", (q: any) => q.eq("slug", history.redirectedTo))
+        .withIndex("by_slug", (q) => q.eq("slug", redirectSlug))
         .unique();
     }
 
     if (!venue || venue.status !== "published") return null;
     const menus = await ctx.db
       .query("menus")
-      .withIndex("by_venue", (q: any) => q.eq("venueId", venue._id))
-      .collect();
-    const menu = menus.find((candidate: any) => candidate.publishedSnapshotId);
+      .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
+      .take(10);
+    const menu = menus.find((candidate) => candidate.publishedSnapshotId);
     if (!menu?.publishedSnapshotId) return null;
     const snapshot = await ctx.db.get(menu.publishedSnapshotId);
     return snapshot ? { ...snapshot.data, redirectedFrom } : null;
