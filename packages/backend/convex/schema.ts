@@ -26,6 +26,9 @@ export default defineSchema({
     hours: v.optional(v.string()),
     logoStorageId: v.optional(v.id("_storage")),
     coverImageStorageId: v.optional(v.id("_storage")),
+    coverVideoProvider: v.optional(externalVideoProvider),
+    coverVideoExternalId: v.optional(v.string()),
+    coverVideoEmbedUrl: v.optional(v.string()),
     accentColor: v.optional(v.string()),
     status: venueStatus,
   })
@@ -98,4 +101,3 @@ export default defineSchema({
     .index("by_menu_version", ["menuId", "version"])
     .index("by_venue", ["venueId"]),
 });
-

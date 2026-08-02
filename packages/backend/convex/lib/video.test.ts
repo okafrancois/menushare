@@ -14,8 +14,9 @@ describe("normalizeExternalVideoUrl", () => {
   });
 
   it("normalizes short YouTube URLs", () => {
-    expect(normalizeExternalVideoUrl("https://youtu.be/abc_DEF-12").externalId)
-      .toBe("abc_DEF-12");
+    expect(
+      normalizeExternalVideoUrl("https://youtu.be/abc_DEF-12").externalId,
+    ).toBe("abc_DEF-12");
   });
 
   it("normalizes Vimeo URLs with tracking disabled", () => {
@@ -27,8 +28,8 @@ describe("normalizeExternalVideoUrl", () => {
   });
 
   it("rejects unknown providers", () => {
-    expect(() => normalizeExternalVideoUrl("https://example.com/video"))
-      .toThrow("UNSUPPORTED_VIDEO_PROVIDER");
+    expect(() =>
+      normalizeExternalVideoUrl("https://example.com/video"),
+    ).toThrow("UNSUPPORTED_VIDEO_PROVIDER");
   });
 });
-

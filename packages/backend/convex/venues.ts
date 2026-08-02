@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { currentUserOrThrow, ownedVenueOrThrow } from "./lib/auth";
+import { normalizeExternalVideoUrl } from "./lib/video";
 import { mutation, query } from "./server";
 
 const RESERVED_SLUGS = new Set([
@@ -125,6 +126,52 @@ export const updateProfile = mutation({
   },
 });
 
+export const updateAppearance = mutation({
+  args: {
+    venueId: v.id("venues"),
+    accentColor: v.optional(v.string()),
+    logoStorageId: v.optional(v.id("_storage")),
+    coverImageStorageId: v.optional(v.id("_storage")),
+    coverVideoUrl: v.optional(v.string()),
+    removeLogo: v.optional(v.boolean()),
+    removeCoverImage: v.optional(v.boolean()),
+    removeCoverVideo: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    await ownedVenueOrThrow(ctx, args.venueId);
+    const patch: Record<string, unknown> = {};
+    if (args.accentColor !== undefined) {
+      if (!/^#[0-9a-f]{6}$/i.test(args.accentColor))
+        throw new Error("INVALID_COLOR");
+      patch.accentColor = args.accentColor;
+    }
+    if (args.logoStorageId) patch.logoStorageId = args.logoStorageId;
+    if (args.coverImageStorageId)
+      patch.coverImageStorageId = args.coverImageStorageId;
+    if (args.removeLogo) patch.logoStorageId = undefined;
+    if (args.removeCoverImage) patch.coverImageStorageId = undefined;
+    if (args.removeCoverVideo) {
+      patch.coverVideoProvider = undefined;
+      patch.coverVideoExternalId = undefined;
+      patch.coverVideoEmbedUrl = undefined;
+    } else if (args.coverVideoUrl) {
+      const video = normalizeExternalVideoUrl(args.coverVideoUrl);
+      patch.coverVideoProvider = video.provider;
+      patch.coverVideoExternalId = video.externalId;
+      patch.coverVideoEmbedUrl = video.embedUrl;
+    }
+    await ctx.db.patch(args.venueId, patch);
+  },
+});
+
+export const generateImageUploadUrl = mutation({
+  args: { venueId: v.id("venues") },
+  handler: async (ctx, { venueId }) => {
+    await ownedVenueOrThrow(ctx, venueId);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const changeSlug = mutation({
   args: { venueId: v.id("venues"), requestedSlug: v.string() },
   handler: async (ctx, { venueId, requestedSlug }) => {
@@ -163,4 +210,3 @@ export const changeSlug = mutation({
     return nextSlug;
   },
 });
-

@@ -7,7 +7,9 @@ export type NormalizedExternalVideo = {
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{6,20}$/;
 const VIMEO_ID = /^\d{5,15}$/;
 
-export function normalizeExternalVideoUrl(input: string): NormalizedExternalVideo {
+export function normalizeExternalVideoUrl(
+  input: string,
+): NormalizedExternalVideo {
   let url: URL;
   try {
     url = new URL(input.trim());
@@ -54,4 +56,3 @@ function youtube(id: string | null | undefined): NormalizedExternalVideo {
     embedUrl: `https://www.youtube-nocookie.com/embed/${id}`,
   };
 }
-

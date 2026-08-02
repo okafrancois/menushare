@@ -16,4 +16,3 @@ export async function POST(request: Request) {
   if (!authServer) return unavailable();
   return authServer.handler.POST(request);
 }
-

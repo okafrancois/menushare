@@ -6,16 +6,19 @@ import type { ReactNode } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { convex } from "@/lib/convex";
+import { MenuStoreProvider } from "@/lib/menu-store";
 
 export function Providers({ children }: { children: ReactNode }) {
-  if (!convex) return children;
+  const content = <MenuStoreProvider>{children}</MenuStoreProvider>;
+
+  if (!convex) return content;
 
   return (
     <ConvexBetterAuthProvider
       client={convex}
       authClient={authClient as unknown as AuthClient}
     >
-      {children}
+      {content}
     </ConvexBetterAuthProvider>
   );
 }

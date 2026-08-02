@@ -4,13 +4,16 @@ MenuShare est un SaaS mobile-first permettant aux restaurants, bars, traiteurs
 et food-trucks de composer un menu riche en médias, de le publier sur une URL
 unique et de le partager par QR code.
 
-## Premier incrément
+## MVP implémenté
 
 - Authentification sans mot de passe : Google, Apple ou code email à 6 chiffres.
 - Création d'un établissement et d'un menu structuré en catégories et plats.
 - Images et vidéos externes uniquement : YouTube et Vimeo pour le MVP.
 - Aperçu mobile et page publique `/<slug>`.
 - Publication par snapshot afin de séparer brouillon et version en ligne.
+- Personnalisation par logo, couverture, couleur dominante et vidéo de couverture.
+- URL partageable, QR code SVG téléchargeable et interface publique responsive.
+- CRUD complet, réordre, disponibilité, suppression et galeries d’images.
 
 ## Stack
 
@@ -25,10 +28,12 @@ bun install
 bun run dev:web
 ```
 
-L'interface et les données de démonstration fonctionnent sans Convex. Pour
-activer l'authentification et la persistance, créer un déploiement Convex puis
-renseigner `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL` et les
-variables serveur listées dans `.env.example`.
+L'interface fonctionne immédiatement en mode démo persistant dans le navigateur.
+Les schémas et mutations Convex couvrent les établissements, slugs uniques,
+menus, médias, stockage d’images et snapshots publiés. Pour brancher une instance
+réelle, créer un déploiement Convex puis renseigner `NEXT_PUBLIC_CONVEX_URL`,
+`NEXT_PUBLIC_CONVEX_SITE_URL` et les variables serveur listées dans
+`.env.example`.
 
 ### Connexion Google
 
@@ -55,6 +60,9 @@ bun run dev:web       # Next.js sur http://localhost:3000
 bun run dev:backend   # Convex dev
 bun run check-types
 bun run test
+bun run test:e2e
 bun run build
 ```
 
+La suite actuelle comprend 15 tests unitaires et 7 scénarios E2E Chromium sur
+les pages publiques et privées, dont un contrôle mobile à 390 × 844.

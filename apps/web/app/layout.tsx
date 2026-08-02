@@ -19,13 +19,16 @@ export const viewport: Viewport = {
   themeColor: "#f6f0e6",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="fr">
+    <html lang="fr" data-scroll-behavior="smooth">
       <body>
         <Providers>{children}</Providers>
       </body>
     </html>
   );
 }
-

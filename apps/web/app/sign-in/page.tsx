@@ -10,12 +10,16 @@ export default function SignInPage() {
         <Brand />
         <div>
           <h1 className="serif">Un menu vivant commence ici.</h1>
-          <p>Créez vos plats, ajoutez vos images ou vos vidéos YouTube/Vimeo, puis publiez votre QR code.</p>
+          <p>
+            Créez vos plats, ajoutez vos images ou vos vidéos YouTube/Vimeo,
+            puis publiez votre QR code.
+          </p>
         </div>
         <span className="mono">MOBILE-FIRST · PASSWORDLESS</span>
       </section>
-      <section className="auth-main"><SignInCard /></section>
+      <section className="auth-main">
+        <SignInCard />
+      </section>
     </main>
   );
 }
-

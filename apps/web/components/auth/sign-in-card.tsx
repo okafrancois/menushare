@@ -44,7 +44,7 @@ export function SignInCard() {
     setPending(provider);
     const { error: authError } = await authClient.signIn.social({
       provider,
-      callbackURL: `${window.location.origin}/dashboard`,
+      callbackURL: `${window.location.origin}/onboarding`,
     });
     if (authError) {
       setError(messageForAuthError(authError.code));
@@ -57,11 +57,10 @@ export function SignInCard() {
     setError(null);
     setPending("email");
 
-    const { error: authError } =
-      await authClient.emailOtp.sendVerificationOtp({
-        email: email.trim().toLowerCase(),
-        type: "sign-in",
-      });
+    const { error: authError } = await authClient.emailOtp.sendVerificationOtp({
+      email: email.trim().toLowerCase(),
+      type: "sign-in",
+    });
 
     setPending(null);
     if (authError) {
@@ -86,7 +85,7 @@ export function SignInCard() {
       setError(messageForAuthError(authError.code));
       return;
     }
-    router.push("/dashboard");
+    router.push("/onboarding");
   };
 
   return (
@@ -104,11 +103,33 @@ export function SignInCard() {
       {step === "email" ? (
         <>
           <div className="auth-methods">
-            <button className="social-button" type="button" onClick={() => startSocial("google")} disabled={pending !== null}>
-              <span className="social-icon">G</span><span>Continuer avec Google</span>{pending === "google" ? <LoaderCircle className="animate-spin" size={17} /> : <ArrowRight size={17} />}
+            <button
+              className="social-button"
+              type="button"
+              onClick={() => startSocial("google")}
+              disabled={pending !== null}
+            >
+              <span className="social-icon">G</span>
+              <span>Continuer avec Google</span>
+              {pending === "google" ? (
+                <LoaderCircle className="animate-spin" size={17} />
+              ) : (
+                <ArrowRight size={17} />
+              )}
             </button>
-            <button className="social-button" type="button" onClick={() => startSocial("apple")} disabled={pending !== null}>
-              <span className="social-icon">●</span><span>Continuer avec Apple</span>{pending === "apple" ? <LoaderCircle className="animate-spin" size={17} /> : <ArrowRight size={17} />}
+            <button
+              className="social-button"
+              type="button"
+              onClick={() => startSocial("apple")}
+              disabled={pending !== null}
+            >
+              <span className="social-icon">●</span>
+              <span>Continuer avec Apple</span>
+              {pending === "apple" ? (
+                <LoaderCircle className="animate-spin" size={17} />
+              ) : (
+                <ArrowRight size={17} />
+              )}
             </button>
           </div>
 
@@ -117,30 +138,86 @@ export function SignInCard() {
           <form onSubmit={requestCode}>
             <div className="form-group">
               <label htmlFor="email">Adresse email</label>
-              <input className="input" id="email" type="email" autoComplete="email" placeholder="vous@restaurant.fr" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <input
+                className="input"
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="vous@restaurant.fr"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
             </div>
-            {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="button button-primary button-block" type="submit" disabled={pending !== null}>
-              {pending === "email" ? <LoaderCircle className="animate-spin" size={17} /> : null}
+            {error && (
+              <p className="form-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              className="button button-primary button-block"
+              type="submit"
+              disabled={pending !== null}
+            >
+              {pending === "email" ? (
+                <LoaderCircle className="animate-spin" size={17} />
+              ) : null}
               Recevoir mon code
             </button>
           </form>
         </>
       ) : (
         <form onSubmit={verifyCode}>
-          <button className="back-button" type="button" onClick={() => { setStep("email"); setOtp(""); setError(null); }}>
+          <button
+            className="back-button"
+            type="button"
+            onClick={() => {
+              setStep("email");
+              setOtp("");
+              setError(null);
+            }}
+          >
             <ArrowLeft size={15} /> Changer d’adresse
           </button>
           <div className="form-group">
             <label htmlFor="otp">Code de connexion</label>
-            <input className="input otp-input" id="otp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="000000" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} required autoFocus />
+            <input
+              className="input otp-input"
+              id="otp"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="000000"
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              required
+              autoFocus
+            />
           </div>
-          {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="button button-primary button-block" type="submit" disabled={pending !== null || otp.length !== 6}>
-            {pending === "otp" ? <LoaderCircle className="animate-spin" size={17} /> : null}
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button
+            className="button button-primary button-block"
+            type="submit"
+            disabled={pending !== null || otp.length !== 6}
+          >
+            {pending === "otp" ? (
+              <LoaderCircle className="animate-spin" size={17} />
+            ) : null}
             Me connecter
           </button>
-          <button className="back-button button-block" type="button" onClick={requestCode} disabled={pending !== null}>
+          <button
+            className="back-button button-block"
+            type="button"
+            onClick={requestCode}
+            disabled={pending !== null}
+          >
             Renvoyer un code
           </button>
         </form>
@@ -153,4 +230,3 @@ export function SignInCard() {
     </div>
   );
 }
-

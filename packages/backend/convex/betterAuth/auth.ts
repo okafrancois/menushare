@@ -18,10 +18,8 @@ export const authComponent = createClient<DataModel>(
 );
 
 function socialProviders() {
-  const providers: Record<
-    string,
-    { clientId: string; clientSecret: string }
-  > = {};
+  const providers: Record<string, { clientId: string; clientSecret: string }> =
+    {};
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     providers.google = {

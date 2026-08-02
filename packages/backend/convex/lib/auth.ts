@@ -19,4 +19,3 @@ export async function ownedMenuOrThrow(ctx: any, menuId: any) {
   const { user, venue } = await ownedVenueOrThrow(ctx, menu.venueId);
   return { user, venue, menu };
 }
-

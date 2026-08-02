@@ -7,4 +7,3 @@ export const authServer =
   convexUrl && convexSiteUrl
     ? convexBetterAuthNextJs({ convexUrl, convexSiteUrl })
     : null;
-
