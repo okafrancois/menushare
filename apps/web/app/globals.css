@@ -1437,6 +1437,14 @@ button {
   background: #fdf8ee;
   box-shadow: 0 12px 26px rgba(70, 48, 35, 0.12);
 }
+.public-venue-card.compact {
+  padding: 16px;
+}
+.public-venue-card.compact .public-meta {
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+}
 .public-description {
   margin: 0;
   color: #74685e;
@@ -1495,6 +1503,9 @@ button {
   width: auto;
   margin: 0;
   padding: 0 0 40px;
+}
+.public-venue-card + .public-content {
+  padding-top: 40px;
 }
 .menu-category {
   scroll-margin-top: 20px;

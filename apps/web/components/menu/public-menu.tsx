@@ -271,7 +271,7 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
         venue.hours ||
         venue.phone ? (
           <section
-            className="public-venue-card"
+            className={`public-venue-card${venue.description ? "" : " compact"}`}
             aria-label="Informations de l’établissement"
           >
             {venue.description ? (
@@ -302,15 +302,17 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
             ) : null}
           </section>
         ) : null}
-        <nav className="public-nav" aria-label="Catégories du menu">
-          <div className="public-nav-inner">
-            {availableCategories.map((category) => (
-              <a href={`#${category.id}`} key={category.id}>
-                {category.name}
-              </a>
-            ))}
-          </div>
-        </nav>
+        {availableCategories.length > 1 ? (
+          <nav className="public-nav" aria-label="Catégories du menu">
+            <div className="public-nav-inner">
+              {availableCategories.map((category) => (
+                <a href={`#${category.id}`} key={category.id}>
+                  {category.name}
+                </a>
+              ))}
+            </div>
+          </nav>
+        ) : null}
         <div className="public-content">
           {availableCategories.length ? (
             availableCategories.map((category) => (
