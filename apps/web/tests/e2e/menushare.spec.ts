@@ -41,6 +41,14 @@ test("accueil, connexion sans mot de passe et redirection inscription", async ({
   await expect(
     page.getByRole("button", { name: "Recevoir mon code" }),
   ).toBeVisible();
+  await expect(page.locator(".auth-art .brand small")).toHaveCSS(
+    "color",
+    "rgba(255, 255, 255, 0.86)",
+  );
+  await expect(page.locator(".auth-art .brand small")).toHaveCSS(
+    "font-weight",
+    "700",
+  );
   await page.getByRole("button", { name: "Continuer avec Google" }).click();
   await expect(page.locator(".form-error")).toContainText("identifiants OAuth");
   await page.goto("/sign-up");
