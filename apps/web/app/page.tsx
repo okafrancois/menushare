@@ -1,7 +1,14 @@
 import { ArrowRight, Play, QrCode } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Brand } from "@/components/brand";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/site-metadata";
+
+export const metadata: Metadata = {
+  title: { absolute: SITE_TITLE },
+  description: SITE_DESCRIPTION,
+};
 
 export default function HomePage() {
   return (

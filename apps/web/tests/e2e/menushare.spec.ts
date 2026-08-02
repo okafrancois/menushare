@@ -22,6 +22,40 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+test("identité navigateur, favicon et titres propres à chaque page", async ({
+  page,
+}) => {
+  const routes = [
+    ["/", "MenuShare — Des menus vivants, en un scan"],
+    ["/sign-in", "Connexion et inscription · MenuShare"],
+    ["/onboarding", "Créer votre premier établissement · MenuShare"],
+    ["/dashboard", "Tableau de bord · MenuShare"],
+    ["/dashboard/menu", "Composer le menu · MenuShare"],
+    ["/dashboard/appearance", "Apparence du menu · MenuShare"],
+    ["/dashboard/settings", "Réglages de l’établissement · MenuShare"],
+    ["/dashboard/share", "Publier et partager · MenuShare"],
+    ["/dashboard/establishments/new", "Nouvel établissement · MenuShare"],
+    ["/menu/nonna-lydie", "Nonna Lydie — La carte · MenuShare"],
+    ["/menu/inconnu", "Menu indisponible · MenuShare"],
+  ] as const;
+
+  for (const [route, title] of routes) {
+    await page.goto(route);
+    await expect(page).toHaveTitle(title);
+  }
+
+  await page.goto("/");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute(
+    "href",
+    /icon\.svg/,
+  );
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
+    "href",
+    "/manifest.webmanifest",
+  );
+  await expect(page.locator(".brand-mark")).toHaveAttribute("src", "/icon.svg");
+});
+
 test("accueil, connexion sans mot de passe et redirection inscription", async ({
   page,
 }) => {

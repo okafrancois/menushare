@@ -1,7 +1,11 @@
 import { Brand } from "@/components/brand";
 import { SignInCard } from "@/components/auth/sign-in-card";
 
-export const metadata = { title: "Connexion" };
+export const metadata = {
+  title: "Connexion et inscription",
+  description:
+    "Connectez-vous à MenuShare avec Google, Apple ou un code envoyé par email.",
+};
 
 export default function SignInPage() {
   return (

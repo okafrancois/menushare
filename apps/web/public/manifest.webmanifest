@@ -1,0 +1,18 @@
+{
+  "name": "MenuShare — Menus vivants",
+  "short_name": "MenuShare",
+  "description": "Créez, publiez et partagez des menus visuels par URL et QR code.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f0e6",
+  "theme_color": "#842744",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
