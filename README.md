@@ -35,18 +35,39 @@ réelle, créer un déploiement Convex puis renseigner `NEXT_PUBLIC_CONVEX_URL`,
 `NEXT_PUBLIC_CONVEX_SITE_URL` et les variables serveur listées dans
 `.env.example`.
 
+## Production
+
+- Application : <https://menushare.vercel.app>
+- Convex : `bright-coyote-805`
+- Google Cloud : projet `menushare-504319`
+- Apple : App ID `com.okatech.menushare`, Services ID
+  `com.okatech.menushare.web`
+- Resend : clé limitée à l'envoi et domaine actuellement vérifié
+  `tontine.okacode.com`
+
+Vercel utilise `apps/web` comme répertoire racine. Les secrets OAuth et Resend
+restent exclusivement dans les variables d'environnement Convex ; Vercel ne
+reçoit que les URLs publiques et les indicateurs d'activation des boutons.
+
 ### Connexion Google
 
-Callback local :
+Callback OAuth (développement ou production : utiliser l'URL `.convex.site` du
+déploiement ciblé) :
 
 ```text
-http://localhost:3000/api/auth/callback/google
+https://bright-coyote-805.convex.site/api/auth/callback/google
 ```
 
 ### Connexion Apple
 
 `APPLE_CLIENT_ID` correspond au Services ID web. `APPLE_CLIENT_SECRET` est le
 JWT client secret Apple, à régénérer avant son expiration.
+
+Callback Apple de production :
+
+```text
+https://bright-coyote-805.convex.site/api/auth/callback/apple
+```
 
 ### Code email
 

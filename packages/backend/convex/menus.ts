@@ -395,6 +395,8 @@ export const publish = mutation({
   handler: async (ctx, { menuId }) => {
     const user = await currentUserOrThrow(ctx);
     const { menu, venue } = await ownedMenuOrThrow(ctx, menuId);
+    const version = menu.version + 1;
+    const publishedAt = Date.now();
     const categories = await ctx.db
       .query("categories")
       .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
@@ -402,6 +404,7 @@ export const publish = mutation({
     const data = {
       venue: {
         ...venue,
+        status: "published" as const,
         logoUrl: venue.logoStorageId
           ? await ctx.storage.getUrl(venue.logoStorageId)
           : undefined,
@@ -409,7 +412,13 @@ export const publish = mutation({
           ? await ctx.storage.getUrl(venue.coverImageStorageId)
           : undefined,
       },
-      menu,
+      menu: {
+        ...menu,
+        status: "published" as const,
+        version,
+        updatedAt: publishedAt,
+        publishedAt,
+      },
       categories: await Promise.all(
         categories.map(async (category) => {
           const items = await ctx.db
@@ -440,8 +449,6 @@ export const publish = mutation({
       ),
     };
 
-    const version = menu.version + 1;
-    const publishedAt = Date.now();
     const snapshotId = await ctx.db.insert("menuSnapshots", {
       menuId,
       venueId: venue._id,

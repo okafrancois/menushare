@@ -11,6 +11,11 @@ export default function SettingsPage() {
   const [form, setForm] = useState(state.venue);
   const [saved, setSaved] = useState(false);
   const slugError = validateSlug(form.slug);
+  const publicHost = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app"
+  )
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
   useEffect(() => setForm(state.venue), [state.venue]);
 
   return (
@@ -72,7 +77,7 @@ export default function SettingsPage() {
           <div className="form-group span-2">
             <label htmlFor="settings-slug">Slug public</label>
             <div className="slug-input">
-              <span>menushare.app/</span>
+              <span>{`${publicHost}/`}</span>
               <input
                 id="settings-slug"
                 value={form.slug}

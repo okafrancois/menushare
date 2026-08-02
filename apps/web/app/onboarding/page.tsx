@@ -19,6 +19,11 @@ export default function OnboardingPage() {
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const error = validateSlug(slug);
+  const publicHost = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app"
+  )
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
 
   function changeName(value: string) {
     setName(value);
@@ -92,7 +97,7 @@ export default function OnboardingPage() {
               <div className="form-group span-2">
                 <label htmlFor="venue-slug">Adresse du menu</label>
                 <div className="slug-input">
-                  <span>menushare.app/</span>
+                  <span>{`${publicHost}/`}</span>
                   <input
                     id="venue-slug"
                     value={slug}

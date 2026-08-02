@@ -62,7 +62,8 @@ async function sendOtpEmail(email: string, otp: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`Resend rejected OTP email: ${response.status}`);
+    const details = (await response.text()).slice(0, 400);
+    throw new Error(`Resend rejected OTP email: ${response.status} ${details}`);
   }
 }
 
