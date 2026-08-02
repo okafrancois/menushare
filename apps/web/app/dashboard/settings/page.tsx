@@ -77,7 +77,7 @@ export default function SettingsPage() {
           <div className="form-group span-2">
             <label htmlFor="settings-slug">Slug public</label>
             <div className="slug-input">
-              <span>{`${publicHost}/`}</span>
+              <span>{`${publicHost}/menu/`}</span>
               <input
                 id="settings-slug"
                 value={form.slug}

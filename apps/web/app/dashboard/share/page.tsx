@@ -12,7 +12,7 @@ export default function SharePage() {
   const [origin, setOrigin] = useState("https://menushare.app");
   const [copied, setCopied] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
-  const url = `${origin}/${state.venue.slug}`;
+  const url = `${origin}/menu/${state.venue.slug}`;
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -83,7 +83,7 @@ export default function SharePage() {
                 ? "Republier les modifications"
                 : "Publier le menu"}
             </button>
-            <Link className="button" href={`/${state.venue.slug}`}>
+            <Link className="button" href={`/menu/${state.venue.slug}`}>
               <ExternalLink size={16} /> Ouvrir
             </Link>
           </div>

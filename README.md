@@ -7,9 +7,11 @@ unique et de le partager par QR code.
 ## MVP implémenté
 
 - Authentification sans mot de passe : Google, Apple ou code email à 6 chiffres.
-- Création d'un établissement et d'un menu structuré en catégories et plats.
+- Onboarding avec création du premier établissement, puis gestion d’un nombre
+  illimité d’établissements depuis le même compte.
 - Images et vidéos externes uniquement : YouTube et Vimeo pour le MVP.
-- Aperçu mobile et page publique `/<slug>`.
+- Aperçu mobile et page publique `/menu/<slug>` ; les anciennes URLs `/<slug>`
+  sont redirigées automatiquement.
 - Publication par snapshot afin de séparer brouillon et version en ligne.
 - Personnalisation par logo, couverture, couleur dominante et vidéo de couverture.
 - URL partageable, QR code SVG téléchargeable et interface publique responsive.
@@ -85,5 +87,5 @@ bun run test:e2e
 bun run build
 ```
 
-La suite actuelle comprend 15 tests unitaires et 7 scénarios E2E Chromium sur
+La suite actuelle comprend 19 tests unitaires et 8 scénarios E2E Chromium sur
 les pages publiques et privées, dont un contrôle mobile à 390 × 844.

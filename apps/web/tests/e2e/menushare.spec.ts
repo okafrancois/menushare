@@ -152,7 +152,7 @@ test("édition, ordre, disponibilité et suppression dans le menu", async ({
   );
 
   await page.getByRole("button", { name: "Publier" }).click();
-  await page.goto("/nonna-lydie");
+  await page.goto("/menu/nonna-lydie");
   await expect(page.getByText("Burrata Pugliese")).toHaveCount(0);
 });
 
@@ -161,20 +161,16 @@ test("apparence, logo, couverture et consentement vidéo Vimeo", async ({
 }) => {
   await page.goto("/dashboard/appearance");
   await page.getByLabel("Code couleur").fill("#125c4a");
-  await page
-    .getByTestId("logo-input")
-    .setInputFiles({
-      name: "logo.svg",
-      mimeType: "image/svg+xml",
-      buffer: tinySvg,
-    });
-  await page
-    .getByTestId("cover-input")
-    .setInputFiles({
-      name: "cover.svg",
-      mimeType: "image/svg+xml",
-      buffer: tinySvg,
-    });
+  await page.getByTestId("logo-input").setInputFiles({
+    name: "logo.svg",
+    mimeType: "image/svg+xml",
+    buffer: tinySvg,
+  });
+  await page.getByTestId("cover-input").setInputFiles({
+    name: "cover.svg",
+    mimeType: "image/svg+xml",
+    buffer: tinySvg,
+  });
   await expect(page.getByRole("img", { name: "Logo actuel" })).toBeVisible();
   await expect(
     page.getByRole("img", { name: "Couverture actuelle" }),
@@ -186,7 +182,7 @@ test("apparence, logo, couverture et consentement vidéo Vimeo", async ({
   await expect(page.getByRole("status")).toContainText("Vidéo enregistrée");
   await page.getByRole("button", { name: "Publier" }).click();
 
-  await page.goto("/nonna-lydie");
+  await page.goto("/menu/nonna-lydie");
   await expect(
     page.getByRole("img", { name: "Logo Nonna Lydie" }),
   ).toBeVisible();
@@ -216,7 +212,7 @@ test("les réglages restent en brouillon jusqu’à la publication", async ({
     "Modifications enregistrées",
   );
 
-  await page.goto("/nonna-lydie");
+  await page.goto("/menu/nonna-lydie");
   await expect(
     page.getByRole("heading", { name: "Nonna Lydie", exact: true }),
   ).toBeVisible();
@@ -226,7 +222,7 @@ test("les réglages restent en brouillon jusqu’à la publication", async ({
 
   await page.goto("/dashboard/settings");
   await page.getByRole("button", { name: "Publier" }).click();
-  await page.goto("/nonna-lydie");
+  await page.goto("/menu/nonna-lydie");
   await expect(
     page.getByRole("heading", { name: "Nonna Lydie Nouveau" }),
   ).toBeVisible();
@@ -234,7 +230,7 @@ test("les réglages restent en brouillon jusqu’à la publication", async ({
 
 test("menu public mobile, galerie vidéo et page inconnue", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/nonna-lydie");
+  await page.goto("/menu/nonna-lydie");
   await expect(
     page.getByRole("heading", { name: "Nonna Lydie" }),
   ).toBeVisible();
@@ -280,4 +276,31 @@ test("vue d’ensemble et navigation responsive du tableau de bord", async ({
     .last()
     .click();
   await expect(page).toHaveURL(/\/dashboard\/appearance$/);
+});
+
+test("plusieurs établissements et ancienne URL publique", async ({ page }) => {
+  await page.goto("/nonna-lydie");
+  await expect(page).toHaveURL(/\/menu\/nonna-lydie$/);
+
+  await page.goto("/dashboard");
+  await page
+    .locator(".dashboard-nav")
+    .getByRole("link", { name: "Ajouter un établissement" })
+    .click();
+  await expect(page).toHaveURL(/\/dashboard\/establishments\/new$/);
+  await page.getByLabel("Nom de l’établissement").fill("Deuxième Adresse");
+  await page.getByLabel("Ville").fill("Paris");
+  await page.getByRole("button", { name: "Créer cet établissement" }).click();
+  await expect(page).toHaveURL(/\/dashboard\/menu$/);
+
+  const venueSelect = page
+    .locator(".dashboard-nav")
+    .getByLabel("Établissement actif");
+  await expect(venueSelect).toHaveValue(/venue-/);
+  await expect(venueSelect.locator("option")).toHaveCount(2);
+  await venueSelect.selectOption({ label: "Nonna Lydie" });
+  await page.goto("/dashboard");
+  await expect(
+    page.getByRole("heading", { name: "Bonjour, Nonna Lydie" }),
+  ).toBeVisible();
 });

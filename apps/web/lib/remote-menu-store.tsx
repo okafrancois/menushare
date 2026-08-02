@@ -2,8 +2,13 @@
 
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/data-model";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { type ReactNode, useMemo } from "react";
+import {
+  useConvexAuth,
+  useMutation,
+  usePaginatedQuery,
+  useQuery,
+} from "convex/react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
   createEmptyState,
@@ -29,13 +34,31 @@ function hasOwn<T extends object>(value: T, key: PropertyKey) {
 
 export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const auth = useConvexAuth();
-  const venues = useQuery(
-    api.venues.listMine,
+  const {
+    results: venues,
+    status: venuesStatus,
+    loadMore: loadMoreVenues,
+  } = usePaginatedQuery(
+    api.venues.listMinePaginated,
     auth.isAuthenticated ? {} : "skip",
+    { initialNumItems: 25 },
   );
-  const workspace = venues?.[0];
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const workspace =
+    venues.find(({ venue }) => venue._id === selectedVenueId) ?? venues[0];
   const menuId = workspace?.menuId;
   const draft = useQuery(api.menus.getDraft, menuId ? { menuId } : "skip");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("menushare.selectedVenue.v1");
+    if (stored) setSelectedVenueId(stored);
+  }, []);
+
+  useEffect(() => {
+    if (!workspace || workspace.venue._id === selectedVenueId) return;
+    setSelectedVenueId(workspace.venue._id);
+    localStorage.setItem("menushare.selectedVenue.v1", workspace.venue._id);
+  }, [selectedVenueId, workspace]);
 
   const createVenueMutation = useMutation(api.venues.create);
   const updateProfile = useMutation(api.venues.updateProfile);
@@ -141,20 +164,39 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const hydrated =
     !auth.isLoading &&
     (!auth.isAuthenticated ||
-      (venues !== undefined && (!menuId || draft !== undefined)));
+      (venuesStatus !== "LoadingFirstPage" &&
+        (!menuId || draft !== undefined)));
 
   const store = useMemo<MenuStore>(
     () => ({
       state,
       hydrated,
       remote: true,
+      venues: venues.map(({ venue }) => ({
+        id: venue._id,
+        name: venue.name,
+        slug: venue.slug,
+        kind: venue.kind,
+        city: venue.city ?? "",
+      })),
+      selectedVenueId: workspace?.venue._id ?? "",
+      selectVenue(venueId) {
+        setSelectedVenueId(venueId);
+        localStorage.setItem("menushare.selectedVenue.v1", venueId);
+      },
+      canLoadMoreVenues: venuesStatus === "CanLoadMore",
+      loadMoreVenues() {
+        if (venuesStatus === "CanLoadMore") loadMoreVenues(25);
+      },
       async createVenue(input) {
-        await createVenueMutation({
+        const created = await createVenueMutation({
           name: input.name,
           kind: input.kind,
           requestedSlug: input.slug,
           city: input.city || undefined,
         });
+        setSelectedVenueId(created.venueId);
+        localStorage.setItem("menushare.selectedVenue.v1", created.venueId);
       },
       async updateVenue(patch) {
         const venueId = state.venue.id as Id<"venues">;
@@ -354,6 +396,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       deleteItemMutation,
       generateImageUploadUrl,
       hydrated,
+      loadMoreVenues,
       menuId,
       publishMutation,
       removeExternalVideo,
@@ -366,6 +409,9 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       updateCategoryMutation,
       updateItemMutation,
       updateProfile,
+      venues,
+      venuesStatus,
+      workspace?.venue._id,
     ],
   );
 

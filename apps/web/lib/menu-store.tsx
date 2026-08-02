@@ -25,10 +25,17 @@ import {
 
 type MaybePromise<T> = T | Promise<T>;
 
+export type VenueChoice = Pick<Venue, "id" | "name" | "slug" | "kind" | "city">;
+
 export type MenuStore = {
   state: MenuState;
   hydrated: boolean;
   remote: boolean;
+  venues: VenueChoice[];
+  selectedVenueId: string;
+  selectVenue: (venueId: string) => void;
+  canLoadMoreVenues: boolean;
+  loadMoreVenues: () => void;
   createVenue: (input: {
     name: string;
     slug: string;
@@ -80,12 +87,30 @@ function uid(prefix: string) {
 
 export function MenuStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<MenuState>(() => createDemoState());
+  const [venueStates, setVenueStates] = useState<Record<string, MenuState>>({});
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setState(hydrateMenuState(JSON.parse(raw)));
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          states?: unknown[];
+          selectedVenueId?: string;
+        };
+        if (Array.isArray(parsed.states) && parsed.states.length > 0) {
+          const states = parsed.states.map(hydrateMenuState);
+          setVenueStates(
+            Object.fromEntries(states.map((entry) => [entry.venue.id, entry])),
+          );
+          setState(
+            states.find((entry) => entry.venue.id === parsed.selectedVenueId) ??
+              states[0],
+          );
+        } else {
+          setState(hydrateMenuState(parsed));
+        }
+      }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     } finally {
@@ -95,8 +120,15 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
+    const states = { ...venueStates, [state.venue.id]: state };
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        states: Object.values(states),
+        selectedVenueId: state.venue.id,
+      }),
+    );
+  }, [hydrated, state, venueStates]);
 
   const store = useMemo<MenuStore>(() => {
     const touch = (next: MenuState): MenuState => ({
@@ -107,8 +139,33 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
       state,
       hydrated,
       remote: false,
-      createVenue: (input) =>
-        setState(createVenueState({ id: uid("venue"), ...input })),
+      venues: Object.values({
+        ...venueStates,
+        [state.venue.id]: state,
+      }).map((entry) => entry.venue),
+      selectedVenueId: state.venue.id,
+      selectVenue: (venueId) => {
+        if (venueId === state.venue.id) return;
+        const next = venueStates[venueId];
+        if (next) {
+          setVenueStates((current) => ({
+            ...current,
+            [state.venue.id]: state,
+          }));
+          setState(next);
+        }
+      },
+      canLoadMoreVenues: false,
+      loadMoreVenues: () => undefined,
+      createVenue: (input) => {
+        const next = createVenueState({ id: uid("venue"), ...input });
+        setVenueStates((current) => ({
+          ...current,
+          [state.venue.id]: state,
+          [next.venue.id]: next,
+        }));
+        setState(next);
+      },
       updateVenue: (patch) =>
         setState((current) =>
           touch({ ...current, venue: { ...current.venue, ...patch } }),
@@ -256,9 +313,13 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
           }),
         ),
       publish: () => setState((current) => publishMenu(current)),
-      resetDemo: () => setState(createDemoState(Date.now())),
+      resetDemo: () => {
+        const demo = createDemoState(Date.now());
+        setVenueStates({ [demo.venue.id]: demo });
+        setState(demo);
+      },
     };
-  }, [hydrated, state]);
+  }, [hydrated, state, venueStates]);
 
   return (
     <MenuStoreContext.Provider value={store}>

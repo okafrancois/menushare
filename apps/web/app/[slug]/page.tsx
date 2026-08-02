@@ -1,17 +1,8 @@
-import type { Metadata } from "next";
-
-import { PublicMenu } from "@/components/menu/public-menu";
+import { permanentRedirect } from "next/navigation";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  return { title: slug === "nonna-lydie" ? "Nonna Lydie" : "Menu public" };
-}
-
 export default async function PublicMenuPage({ params }: PageProps) {
   const { slug } = await params;
-  return <PublicMenu slug={slug} />;
+  permanentRedirect(`/menu/${slug}`);
 }

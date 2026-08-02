@@ -61,6 +61,7 @@ export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const RESERVED_SLUGS = new Set([
   "api",
   "dashboard",
+  "menu",
   "onboarding",
   "sign-in",
   "sign-up",

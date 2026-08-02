@@ -21,7 +21,7 @@ export default function DashboardPage() {
           <span className="eyebrow">Tableau de bord</span>
           <h1 className="serif">Bonjour, {state.venue.name}</h1>
         </div>
-        <Link className="button button-dark" href={`/${state.venue.slug}`}>
+        <Link className="button button-dark" href={`/menu/${state.venue.slug}`}>
           <Eye size={16} /> Voir le menu
         </Link>
       </div>

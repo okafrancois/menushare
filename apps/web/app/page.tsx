@@ -10,7 +10,7 @@ export default function HomePage() {
         <div className="container site-header-inner">
           <Brand />
           <nav className="header-nav" aria-label="Navigation principale">
-            <Link className="button" href="/nonna-lydie">
+            <Link className="button" href="/menu/nonna-lydie">
               Voir la démo
             </Link>
             <Link className="button button-primary" href="/sign-in">
@@ -35,7 +35,7 @@ export default function HomePage() {
               <Link className="button button-primary" href="/sign-in">
                 Créer mon menu <ArrowRight size={16} />
               </Link>
-              <Link className="button" href="/nonna-lydie">
+              <Link className="button" href="/menu/nonna-lydie">
                 <Play size={15} /> Explorer la démo
               </Link>
             </div>

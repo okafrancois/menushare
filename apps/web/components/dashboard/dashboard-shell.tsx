@@ -4,6 +4,7 @@ import {
   Eye,
   LayoutDashboard,
   Palette,
+  Plus,
   QrCode,
   Settings,
   Utensils,
@@ -24,6 +25,54 @@ const links = [
   { href: "/dashboard/settings", label: "Réglages", icon: Settings },
 ] as const;
 
+function VenueSwitcher({ mobile = false }: { mobile?: boolean }) {
+  const {
+    venues,
+    selectedVenueId,
+    selectVenue,
+    canLoadMoreVenues,
+    loadMoreVenues,
+  } = useMenuStore();
+
+  return (
+    <div className={mobile ? "venue-switcher mobile" : "venue-switcher"}>
+      <label htmlFor={mobile ? "active-venue-mobile" : "active-venue"}>
+        Établissement actif
+      </label>
+      <div className="venue-switcher-row">
+        <select
+          id={mobile ? "active-venue-mobile" : "active-venue"}
+          value={selectedVenueId}
+          onChange={(event) => selectVenue(event.target.value)}
+        >
+          {venues.map((venue) => (
+            <option value={venue.id} key={venue.id}>
+              {venue.name}
+            </option>
+          ))}
+        </select>
+        <Link
+          className="venue-add-button"
+          href="/dashboard/establishments/new"
+          aria-label="Ajouter un établissement"
+          title="Ajouter un établissement"
+        >
+          <Plus size={17} />
+        </Link>
+      </div>
+      {canLoadMoreVenues ? (
+        <button
+          className="venue-load-more"
+          type="button"
+          onClick={loadMoreVenues}
+        >
+          Afficher plus d’établissements
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { state, publish } = useMenuStore();
@@ -38,7 +87,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <nav className="header-nav">
               <Link
                 className="button"
-                href={`/${state.venue.slug}`}
+                href={`/menu/${state.venue.slug}`}
                 target="_blank"
               >
                 <Eye size={16} /> Aperçu
@@ -55,7 +104,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </header>
         <div className="dashboard-layout">
           <aside className="dashboard-nav">
-            <div className="dashboard-nav-title">{state.venue.name}</div>
+            <VenueSwitcher />
             {links.map(({ href, label, icon: Icon }) => (
               <Link
                 className={`dashboard-link ${pathname === href ? "active" : ""}`}
@@ -66,7 +115,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </aside>
-          <main className="dashboard-main">{children}</main>
+          <main className="dashboard-main">
+            <VenueSwitcher mobile />
+            {children}
+          </main>
         </div>
         <nav
           className="dashboard-mobile-nav"

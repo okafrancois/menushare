@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -10,6 +11,7 @@ const RESERVED_SLUGS = new Set([
   "api",
   "dashboard",
   "legal",
+  "menu",
   "privacy",
   "sign-in",
   "sign-up",
@@ -43,6 +45,7 @@ async function touchVenueMenu(ctx: MutationCtx, venueId: Id<"venues">) {
   }
 }
 
+// Kept for clients deployed before multi-establishment pagination.
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
@@ -63,6 +66,32 @@ export const listMine = query({
         )?._id,
       })),
     );
+  },
+});
+
+export const listMinePaginated = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const user = await currentUserOrThrow(ctx);
+    const result = await ctx.db
+      .query("venues")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .order("desc")
+      .paginate(paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map(async (venue) => ({
+          venue,
+          menuId: (
+            await ctx.db
+              .query("menus")
+              .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
+              .unique()
+          )?._id,
+        })),
+      ),
+    };
   },
 });
 
