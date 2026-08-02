@@ -53,7 +53,7 @@ export type MenuStore = {
   ) => MaybePromise<void>;
   deleteCategory: (id: string) => MaybePromise<void>;
   moveCategory: (id: string, direction: -1 | 1) => MaybePromise<void>;
-  addItem: (categoryId: string, item: MenuItem) => MaybePromise<void>;
+  addItem: (categoryId: string, item: MenuItem) => MaybePromise<string>;
   updateItem: (
     categoryId: string,
     id: string,
@@ -216,7 +216,7 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
             categories: move(current.categories, index, index + direction),
           });
         }),
-      addItem: (categoryId, item) =>
+      addItem: (categoryId, item) => {
         setState((current) =>
           touch({
             ...current,
@@ -226,7 +226,9 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
                 : category,
             ),
           }),
-        ),
+        );
+        return item.id;
+      },
       updateItem: (categoryId, id, patch) =>
         setState((current) =>
           touch({

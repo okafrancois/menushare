@@ -12,10 +12,18 @@ export type MenuItem = {
   id: string;
   name: string;
   description: string;
+  details: string;
   priceCents: number;
   available: boolean;
   images: MenuImage[];
   video?: ExternalVideo;
+  ingredients: string[];
+  pairingName: string;
+  pairingPriceCents?: number;
+  reviewRating?: number;
+  reviewCount?: number;
+  reviewQuote: string;
+  reviewAuthor: string;
 };
 
 export type MenuCategory = {
@@ -105,19 +113,38 @@ export function createItem(input: {
   id: string;
   name: string;
   description?: string;
+  details?: string;
   price: string;
   videoUrl?: string;
+  ingredients?: string[];
+  pairingName?: string;
+  pairingPrice?: string;
+  reviewRating?: number;
+  reviewCount?: number;
+  reviewQuote?: string;
+  reviewAuthor?: string;
 }): MenuItem {
   return {
     id: input.id,
     name: input.name.trim(),
     description: input.description?.trim() ?? "",
+    details: input.details?.trim() ?? "",
     priceCents: parsePriceToCents(input.price),
     available: true,
     images: [],
     video: input.videoUrl?.trim()
       ? normalizeExternalVideoUrl(input.videoUrl)
       : undefined,
+    ingredients:
+      input.ingredients?.map((value) => value.trim()).filter(Boolean) ?? [],
+    pairingName: input.pairingName?.trim() ?? "",
+    pairingPriceCents: input.pairingPrice?.trim()
+      ? parsePriceToCents(input.pairingPrice)
+      : undefined,
+    reviewRating: input.reviewRating,
+    reviewCount: input.reviewCount,
+    reviewQuote: input.reviewQuote?.trim() ?? "",
+    reviewAuthor: input.reviewAuthor?.trim() ?? "",
   };
 }
 
@@ -228,7 +255,24 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             name: "Burrata Pugliese",
             description:
               "Burrata 125 g des Pouilles, tomates confites au basilic.",
+            details:
+              "Une burrata crémeuse des Pouilles, servie avec des tomates cerises marinées, du basilic frais et un filet d’huile d’olive extra vierge.",
             price: "14",
+            ingredients: [
+              "Burrata des Pouilles",
+              "Tomates cerises",
+              "Basilic frais",
+              "Huile d’olive extra vierge",
+              "Fleur de sel",
+              "Poivre du moulin",
+            ],
+            pairingName: "Verre de Vermentino di Sardegna",
+            pairingPrice: "7",
+            reviewRating: 4.9,
+            reviewCount: 148,
+            reviewQuote:
+              "Une burrata d’une fraîcheur incroyable, comme en Italie.",
+            reviewAuthor: "Chiara F.",
           }),
           createItem({
             id: "vitello",
@@ -299,5 +343,28 @@ export function hydrateMenuState(value: unknown): MenuState {
   const candidate = value as Partial<MenuState>;
   if (!candidate.venue?.slug || !Array.isArray(candidate.categories))
     return createDemoState();
-  return candidate as MenuState;
+  const withDefaults = (item: MenuItem): MenuItem => ({
+    ...item,
+    details: item.details ?? "",
+    ingredients: item.ingredients ?? [],
+    pairingName: item.pairingName ?? "",
+    reviewQuote: item.reviewQuote ?? "",
+    reviewAuthor: item.reviewAuthor ?? "",
+  });
+  return {
+    ...(candidate as MenuState),
+    categories: candidate.categories.map((category) => ({
+      ...category,
+      items: category.items.map(withDefaults),
+    })),
+    published: candidate.published
+      ? {
+          ...candidate.published,
+          categories: candidate.published.categories.map((category) => ({
+            ...category,
+            items: category.items.map(withDefaults),
+          })),
+        }
+      : undefined,
+  };
 }

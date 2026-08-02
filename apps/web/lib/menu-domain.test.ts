@@ -47,6 +47,27 @@ describe("plats et médias", () => {
     expect(item.available).toBe(true);
   });
 
+  it("conserve les contenus éditoriaux de la fiche plat", () => {
+    const item = createItem({
+      id: "burrata",
+      name: "Burrata",
+      description: "La description courte.",
+      details: "Une longue description de la préparation.",
+      price: "14",
+      ingredients: ["Burrata des Pouilles", " Basilic frais "],
+      pairingName: "Verre de Vermentino",
+      pairingPrice: "7",
+      reviewRating: 4.9,
+      reviewCount: 148,
+      reviewQuote: "Comme en Italie.",
+      reviewAuthor: "Chiara F.",
+    });
+    expect(item.ingredients).toEqual(["Burrata des Pouilles", "Basilic frais"]);
+    expect(item.pairingPriceCents).toBe(700);
+    expect(item.reviewRating).toBe(4.9);
+    expect(item.details).toContain("préparation");
+  });
+
   it("rejette un prix ou un hébergeur vidéo invalide", () => {
     expect(() => parsePriceToCents("gratuit? ")).toThrow("INVALID_PRICE");
     expect(() =>
@@ -100,5 +121,17 @@ describe("état initial et hydratation", () => {
 
   it("retombe sur la démo si le stockage est corrompu", () => {
     expect(hydrateMenuState({ nope: true }).venue.slug).toBe("nonna-lydie");
+  });
+
+  it("complète les anciennes fiches sauvegardées avec les nouveaux champs", () => {
+    const legacy = createDemoState();
+    const item = legacy.categories[0].items[0] as Partial<
+      (typeof legacy.categories)[number]["items"][number]
+    >;
+    delete item.details;
+    delete item.ingredients;
+    const hydrated = hydrateMenuState(legacy);
+    expect(hydrated.categories[0].items[0].details).toBe("");
+    expect(hydrated.categories[0].items[0].ingredients).toEqual([]);
   });
 });

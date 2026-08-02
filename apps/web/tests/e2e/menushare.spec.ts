@@ -3,6 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 const tinySvg = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#d97757"/></svg>',
 );
+const secondTinySvg = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#76263c"/></svg>',
+);
 
 async function blockExternalPlayers(page: Page) {
   await page.route(/(youtube|youtu\.be|vimeo)/, (route) => route.abort());
@@ -76,28 +79,48 @@ test("onboarding puis création complète d’un menu publié", async ({ page })
   await page.getByRole("button", { name: "Ajouter un plat" }).click();
   await page.getByLabel("Nom du plat").fill("Œufs bénédicte");
   await page
-    .getByLabel("Description")
+    .getByLabel("Description courte")
     .fill("Œufs pochés, brioche et sauce hollandaise.");
+  await page
+    .getByLabel("Description complète de la fiche")
+    .fill("Des œufs fermiers pochés minute sur une brioche toastée.");
   await page.getByLabel("Prix (€)").fill("16,50");
   await page
     .getByLabel("Vidéo YouTube ou Vimeo")
     .fill("https://youtu.be/dQw4w9WgXcQ");
-  await page.getByRole("button", { name: "Enregistrer" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Œufs bénédicte", level: 3 }),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Modifier Œufs bénédicte" }).click();
+  await page
+    .getByLabel("Ingrédients")
+    .fill("Œufs fermiers\nBrioche toastée\nSauce hollandaise");
+  await page
+    .getByLabel("Accord ou accompagnement")
+    .fill("Mimosa à l’orange fraîche");
+  await page.getByLabel("Prix de l’accord (€)").fill("8");
+  await page.getByLabel("Note client (sur 5)").fill("4,9");
+  await page.getByLabel("Nombre d’avis").fill("42");
+  await page
+    .getByLabel("Avis mis en avant")
+    .fill("Le brunch parfait du dimanche.");
+  await page.getByLabel("Auteur de l’avis").fill("Léa M.");
   const imageInput = page.getByRole("dialog").locator('input[type="file"]');
-  await imageInput.setInputFiles({
-    name: "oeufs.svg",
-    mimeType: "image/svg+xml",
-    buffer: tinySvg,
-  });
+  await imageInput.setInputFiles([
+    {
+      name: "oeufs.svg",
+      mimeType: "image/svg+xml",
+      buffer: tinySvg,
+    },
+    {
+      name: "oeufs-detail.svg",
+      mimeType: "image/svg+xml",
+      buffer: secondTinySvg,
+    },
+  ]);
   await expect(
     page.getByRole("dialog").getByRole("img", { name: "oeufs.svg" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Œufs bénédicte", level: 3 }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Publier" }).click();
   await expect(page.getByRole("button", { name: "Publié" })).toBeVisible();
@@ -110,7 +133,7 @@ test("onboarding puis création complète d’un menu publié", async ({ page })
     "qr-bistro-des-tests.svg",
   );
 
-  await page.goto("/bistro-des-tests");
+  await page.goto("/menu/bistro-des-tests");
   await expect(
     page.getByRole("heading", { name: "Bistro des Tests", level: 1 }),
   ).toBeVisible();
@@ -120,6 +143,21 @@ test("onboarding puis création complète d’un menu publié", async ({ page })
   await page.getByRole("button", { name: "Voir Œufs bénédicte" }).click();
   await expect(
     page.getByRole("dialog").getByRole("img", { name: "oeufs.svg" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Des œufs fermiers pochés minute",
+  );
+  await expect(page.getByRole("dialog")).toContainText("Œufs fermiers");
+  await expect(page.getByRole("dialog")).toContainText(
+    "Mimosa à l’orange fraîche",
+  );
+  await expect(page.getByRole("dialog")).toContainText("4,9/5");
+  await expect(page.getByRole("dialog")).toContainText(
+    "Le brunch parfait du dimanche.",
+  );
+  await page.getByRole("button", { name: "Média suivant" }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("img", { name: "oeufs-detail.svg" }),
   ).toBeVisible();
 });
 
@@ -156,7 +194,7 @@ test("édition, ordre, disponibilité et suppression dans le menu", async ({
   await expect(page.getByText("Burrata Pugliese")).toHaveCount(0);
 });
 
-test("apparence, logo, couverture et consentement vidéo Vimeo", async ({
+test("apparence, logo, couverture et lecteur vidéo Vimeo immédiat", async ({
   page,
 }) => {
   await page.goto("/dashboard/appearance");
@@ -189,10 +227,6 @@ test("apparence, logo, couverture et consentement vidéo Vimeo", async ({
   await page
     .getByRole("button", { name: "Lire la vidéo de couverture" })
     .click();
-  await expect(
-    page.getByRole("button", { name: /Lire sur Vimeo/ }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /Lire sur Vimeo/ }).click();
   await expect(page.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /player\.vimeo\.com\/video\/76979871/,
@@ -243,11 +277,11 @@ test("menu public mobile, galerie vidéo et page inconnue", async ({ page }) => 
     .getByRole("button", { name: "Voir Tagliatelle al Tartufo" })
     .click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: /Lire sur YouTube/ }).click();
   await expect(page.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /youtube-nocookie\.com\/embed/,
   );
+  await expect(page.locator(".dish-sheet")).toHaveCSS("min-height", "844px");
   await page.getByRole("button", { name: "Fermer" }).click();
 
   await page.goto("/ce-menu-nexiste-pas");

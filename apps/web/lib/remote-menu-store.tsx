@@ -124,6 +124,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           id: item._id,
           name: item.name,
           description: item.description ?? "",
+          details: item.details ?? "",
           priceCents: item.priceCents,
           available: item.active,
           images: item.media
@@ -141,6 +142,13 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
                   embedUrl: video.embedUrl,
                 }
               : undefined,
+          ingredients: item.ingredients ?? [],
+          pairingName: item.pairingName ?? "",
+          pairingPriceCents: item.pairingPriceCents,
+          reviewRating: item.reviewRating,
+          reviewCount: item.reviewCount,
+          reviewQuote: item.reviewQuote ?? "",
+          reviewAuthor: item.reviewAuthor ?? "",
         } satisfies MenuItem;
       }),
     }));
@@ -319,11 +327,20 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           categoryId: categoryId as Id<"categories">,
           name: item.name,
           description: item.description || undefined,
+          details: item.details || undefined,
           priceCents: item.priceCents,
+          ingredients: item.ingredients.length ? item.ingredients : undefined,
+          pairingName: item.pairingName || undefined,
+          pairingPriceCents: item.pairingPriceCents,
+          reviewRating: item.reviewRating,
+          reviewCount: item.reviewCount,
+          reviewQuote: item.reviewQuote || undefined,
+          reviewAuthor: item.reviewAuthor || undefined,
         });
         if (item.video) {
           await setExternalVideo({ itemId, url: videoUrl(item.video) });
         }
+        return itemId;
       },
       async updateItem(_categoryId, id, patch) {
         const itemId = id as Id<"menuItems">;
@@ -331,8 +348,16 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           itemId,
           name: patch.name,
           description: patch.description,
+          details: patch.details,
           priceCents: patch.priceCents,
           active: patch.available,
+          ingredients: patch.ingredients,
+          pairingName: patch.pairingName,
+          pairingPriceCents: patch.pairingPriceCents,
+          reviewRating: patch.reviewRating,
+          reviewCount: patch.reviewCount,
+          reviewQuote: patch.reviewQuote,
+          reviewAuthor: patch.reviewAuthor,
         });
         if (hasOwn(patch, "video")) {
           if (patch.video) {

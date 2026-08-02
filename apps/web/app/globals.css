@@ -979,10 +979,23 @@ button {
   color: white;
   background: rgba(40, 30, 27, 0.72);
 }
+.image-tile.pending > span {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  left: 5px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  color: white;
+  background: rgba(40, 30, 27, 0.74);
+  font-size: 9px;
+  text-align: center;
+}
 .image-upload {
   cursor: pointer;
   color: var(--muted);
   font-size: 11px;
+  text-align: center;
 }
 .image-upload input {
   position: absolute;
@@ -1404,6 +1417,17 @@ button {
   color: rgba(255, 255, 255, 0.76);
   font-size: clamp(16px, 2vw, 20px);
 }
+.public-hero .public-tagline {
+  margin: 0 0 9px;
+  color: white;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(20px, 3vw, 28px);
+}
+.public-hero .public-description {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
 .public-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1439,7 +1463,7 @@ button {
   white-space: nowrap;
 }
 .public-content {
-  width: min(860px, calc(100% - 32px));
+  width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
   padding: 60px 0 90px;
 }
@@ -1456,17 +1480,40 @@ button {
   font-weight: 500;
   line-height: 1;
 }
-.public-item {
+.public-items-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 22px;
-  align-items: center;
-  padding: 18px 0;
-  border-top: 1px solid #ded2c3;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 24px;
+}
+.public-item {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #dfd2c1;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.72);
+  box-shadow: 0 12px 35px rgba(70, 43, 31, 0.07);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+.public-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 48px rgba(70, 43, 31, 0.13);
+}
+.public-item-copy {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px 23px;
 }
 .public-item h3 {
-  margin: 0 0 6px;
-  font-size: 20px;
+  margin: 0 0 7px;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 27px;
+  font-weight: 500;
+  line-height: 1.05;
 }
 .public-item p {
   margin: 0;
@@ -1474,17 +1521,24 @@ button {
   font-size: 14px;
 }
 .public-item-price {
-  display: block;
-  margin-top: 8px;
+  flex: 0 0 auto;
+  margin-top: 3px;
   color: var(--wine);
-  font-weight: 800;
+  font-size: 17px;
+  font-weight: 900;
 }
 .public-item-art {
   position: relative;
-  width: 120px;
-  aspect-ratio: 1;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #d2a06e, #74263d);
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+  background:
+    radial-gradient(
+      circle at 75% 22%,
+      rgba(255, 205, 139, 0.45),
+      transparent 23%
+    ),
+    linear-gradient(135deg, #bd744f, #602036);
 }
 .public-item-art.video::after {
   content: "▶";
@@ -1506,6 +1560,227 @@ button {
   background: #25221e;
   text-align: center;
   font-size: 12px;
+}
+
+.dish-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow-y: auto;
+  background: rgba(94, 87, 81, 0.68);
+  backdrop-filter: blur(7px);
+}
+.dish-sheet {
+  position: relative;
+  width: min(450px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+  color: #241d19;
+  background: #fbf4e9;
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.32);
+  animation: dish-sheet-in 360ms cubic-bezier(0.22, 0.8, 0.23, 1) both;
+}
+@keyframes dish-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.dish-sheet-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  color: white;
+  background: rgba(24, 18, 16, 0.58);
+  backdrop-filter: blur(12px);
+}
+.dish-sheet-media {
+  position: relative;
+  width: 100%;
+  min-height: min(52vh, 460px);
+  color: white;
+  background:
+    radial-gradient(
+      circle at 74% 22%,
+      rgba(255, 206, 143, 0.48),
+      transparent 24%
+    ),
+    linear-gradient(145deg, #b76b49, #4e1d2c);
+}
+.dish-sheet-media > img,
+.dish-sheet-media > iframe {
+  display: block;
+  width: 100%;
+  height: min(52vh, 460px);
+  border: 0;
+  object-fit: cover;
+}
+.dish-media-dots {
+  position: absolute;
+  right: 0;
+  bottom: 142px;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.dish-media-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+.dish-media-dots button.active {
+  width: 24px;
+  border-radius: 999px;
+  background: white;
+}
+.dish-media-title {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  padding: 78px 22px 24px;
+  color: white;
+  background: linear-gradient(transparent, rgba(21, 15, 13, 0.84));
+}
+.dish-media-title .eyebrow {
+  color: rgba(255, 255, 255, 0.8);
+}
+.dish-media-title h2 {
+  margin: 5px 0 12px;
+  font-size: 31px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+.dish-media-title > strong {
+  font-size: 18px;
+}
+.dish-sheet-copy {
+  padding: 24px 22px 26px;
+}
+.dish-lead {
+  margin: 0;
+  color: #625850;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.dish-detail-section {
+  margin-top: 27px;
+}
+.dish-detail-section h3 {
+  margin: 0 0 13px;
+  color: var(--accent, var(--wine));
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.dish-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dish-ingredients li {
+  padding: 9px 13px;
+  border: 1px solid #d9ccbb;
+  border-radius: 999px;
+  color: #625850;
+  background: rgba(245, 237, 225, 0.9);
+  font-size: 12px;
+}
+.dish-pairing {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid #d9ccbb;
+  border-radius: 20px;
+  background: rgba(255, 252, 247, 0.75);
+  box-shadow: 0 10px 24px rgba(81, 57, 44, 0.1);
+}
+.dish-pairing h3 {
+  margin: 0 0 15px;
+}
+.dish-pairing p {
+  margin: 0;
+  color: #625850;
+}
+.dish-pairing > strong {
+  color: var(--accent, var(--wine));
+  font-size: 20px;
+}
+.dish-rating {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dish-rating span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent, var(--wine));
+}
+.dish-rating > strong {
+  font-size: 13px;
+}
+.dish-rating small {
+  color: var(--muted);
+}
+.dish-reviews blockquote {
+  margin: 18px 0 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-style: italic;
+  line-height: 1.35;
+}
+.dish-reviews cite {
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 800;
+}
+.dish-reviews {
+  padding: 18px;
+  border: 1px solid #d9ccbb;
+  border-radius: 20px;
+  background: rgba(255, 252, 247, 0.75);
+  box-shadow: 0 10px 24px rgba(81, 57, 44, 0.1);
+}
+.dish-sheet-actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 28px -22px -26px;
+  padding: 16px 20px;
+  border: 0;
+  border-top: 1px solid rgba(222, 209, 193, 0.8);
+  border-radius: 0;
+  background: rgba(251, 244, 233, 0.9);
+  backdrop-filter: blur(14px);
 }
 
 @media (max-width: 900px) {
@@ -1589,6 +1864,9 @@ button {
   }
   .public-modal-media {
     min-height: 340px;
+  }
+  .public-items-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1683,15 +1961,32 @@ button {
     min-height: 280px;
   }
   .public-item {
-    grid-template-columns: minmax(0, 1fr) 88px;
-    gap: 14px;
+    display: block;
   }
   .public-item-art {
-    width: 88px;
-    border-radius: 14px;
+    width: 100%;
+    border-radius: 0;
   }
   .public-nav-inner {
     justify-content: flex-start;
+  }
+  .dish-sheet-close {
+    top: 12px;
+    right: 12px;
+    width: 44px;
+    height: 44px;
+  }
+  .dish-sheet-media,
+  .dish-sheet-media > img,
+  .dish-sheet-media > iframe {
+    height: 52vh;
+    min-height: 380px;
+  }
+  .dish-sheet-copy {
+    padding: 24px 20px 26px;
+  }
+  .dish-pairing {
+    padding: 18px;
   }
 }
 

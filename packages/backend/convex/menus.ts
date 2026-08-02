@@ -182,7 +182,15 @@ export const addItem = mutation({
     categoryId: v.id("categories"),
     name: v.string(),
     description: v.optional(v.string()),
+    details: v.optional(v.string()),
     priceCents: v.number(),
+    ingredients: v.optional(v.array(v.string())),
+    pairingName: v.optional(v.string()),
+    pairingPriceCents: v.optional(v.number()),
+    reviewRating: v.optional(v.number()),
+    reviewCount: v.optional(v.number()),
+    reviewQuote: v.optional(v.string()),
+    reviewAuthor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const category = await ctx.db.get(args.categoryId);
@@ -198,7 +206,20 @@ export const addItem = mutation({
       categoryId: args.categoryId,
       name: args.name.trim(),
       description: args.description?.trim(),
+      details: args.details?.trim(),
       priceCents: Math.max(0, Math.round(args.priceCents)),
+      ingredients: args.ingredients
+        ?.map((value) => value.trim())
+        .filter(Boolean),
+      pairingName: args.pairingName?.trim(),
+      pairingPriceCents:
+        args.pairingPriceCents === undefined
+          ? undefined
+          : Math.max(0, Math.round(args.pairingPriceCents)),
+      reviewRating: args.reviewRating,
+      reviewCount: args.reviewCount,
+      reviewQuote: args.reviewQuote?.trim(),
+      reviewAuthor: args.reviewAuthor?.trim(),
       order: items.length,
       active: true,
     });
@@ -212,8 +233,16 @@ export const updateItem = mutation({
     itemId: v.id("menuItems"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    details: v.optional(v.string()),
     priceCents: v.optional(v.number()),
     active: v.optional(v.boolean()),
+    ingredients: v.optional(v.array(v.string())),
+    pairingName: v.optional(v.string()),
+    pairingPriceCents: v.optional(v.number()),
+    reviewRating: v.optional(v.number()),
+    reviewCount: v.optional(v.number()),
+    reviewQuote: v.optional(v.string()),
+    reviewAuthor: v.optional(v.string()),
   },
   handler: async (ctx, { itemId, ...patch }) => {
     const { menuId } = await menuIdForItem(ctx, itemId);
@@ -221,6 +250,19 @@ export const updateItem = mutation({
       ...patch,
       name: patch.name?.trim(),
       description: patch.description?.trim(),
+      details: patch.details?.trim(),
+      ingredients: patch.ingredients
+        ?.map((value) => value.trim())
+        .filter(Boolean),
+      pairingName: patch.pairingName?.trim(),
+      pairingPriceCents:
+        patch.pairingPriceCents === undefined
+          ? undefined
+          : Math.max(0, Math.round(patch.pairingPriceCents)),
+      reviewRating: patch.reviewRating,
+      reviewCount: patch.reviewCount,
+      reviewQuote: patch.reviewQuote?.trim(),
+      reviewAuthor: patch.reviewAuthor?.trim(),
       priceCents:
         patch.priceCents === undefined
           ? undefined

@@ -6,6 +6,7 @@ import {
   MapPin,
   Phone,
   Play,
+  Star,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -76,8 +77,16 @@ type PublishedPayload = {
       _id: string;
       name: string;
       description?: string;
+      details?: string;
       priceCents: number;
       active: boolean;
+      ingredients?: string[];
+      pairingName?: string;
+      pairingPriceCents?: number;
+      reviewRating?: number;
+      reviewCount?: number;
+      reviewQuote?: string;
+      reviewAuthor?: string;
       media: Array<{
         _id: string;
         kind: "image" | "externalVideo";
@@ -144,6 +153,7 @@ function toPublicSnapshot(value: unknown): MenuSnapshot | null {
         id: item._id,
         name: item.name,
         description: item.description ?? "",
+        details: item.details ?? "",
         priceCents: item.priceCents,
         available: item.active,
         images: item.media
@@ -161,6 +171,13 @@ function toPublicSnapshot(value: unknown): MenuSnapshot | null {
                 embedUrl: video.embedUrl,
               }
             : undefined,
+        ingredients: item.ingredients ?? [],
+        pairingName: item.pairingName ?? "",
+        pairingPriceCents: item.pairingPriceCents,
+        reviewRating: item.reviewRating,
+        reviewCount: item.reviewCount,
+        reviewQuote: item.reviewQuote ?? "",
+        reviewAuthor: item.reviewAuthor ?? "",
       };
     }),
   }));
@@ -227,7 +244,10 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
             {venue.kind} · {venue.city}
           </span>
           <h1 className="serif">{venue.name}</h1>
-          <p>{venue.description}</p>
+          {venue.tagline ? (
+            <p className="public-tagline">{venue.tagline}</p>
+          ) : null}
+          <p className="public-description">{venue.description}</p>
           <div className="public-meta">
             {venue.address || venue.city ? (
               <span>
@@ -274,42 +294,46 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
                 <span className="eyebrow">{category.eyebrow}</span>
                 <h2 className="serif">{category.name}</h2>
               </header>
-              {category.items.map((item) => (
-                <button
-                  className="public-item"
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelected(item)}
-                  aria-label={`Voir ${item.name}`}
-                >
-                  <div>
-                    <h3>{item.name}</h3>
-                    <p>{item.description}</p>
-                    <span className="public-item-price">
-                      {formatPrice(item.priceCents)}
-                    </span>
-                  </div>
-                  <div
-                    className={`public-item-art${item.video ? " video" : ""}`}
-                    style={
-                      item.images[0]
-                        ? {
-                            backgroundImage: `url(${item.images[0].dataUrl})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }
-                        : undefined
-                    }
-                    aria-label={
-                      item.video
-                        ? `Vidéo ${item.video.provider}`
-                        : item.images.length
-                          ? "Image du plat"
-                          : "Illustration du plat"
-                    }
-                  />
-                </button>
-              ))}
+              <div className="public-items-grid">
+                {category.items.map((item) => (
+                  <button
+                    className="public-item"
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelected(item)}
+                    aria-label={`Voir ${item.name}`}
+                  >
+                    <div
+                      className={`public-item-art${item.video ? " video" : ""}`}
+                      style={
+                        item.images[0]
+                          ? {
+                              backgroundImage: `url(${item.images[0].dataUrl})`,
+                              backgroundSize: "cover",
+                              backgroundPosition: "center",
+                            }
+                          : undefined
+                      }
+                      aria-label={
+                        item.video
+                          ? `Vidéo ${item.video.provider}`
+                          : item.images.length
+                            ? "Image du plat"
+                            : "Illustration du plat"
+                      }
+                    />
+                    <div className="public-item-copy">
+                      <div>
+                        <h3>{item.name}</h3>
+                        <p>{item.description}</p>
+                      </div>
+                      <span className="public-item-price">
+                        {formatPrice(item.priceCents)}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </section>
           ))
         ) : (
@@ -322,7 +346,11 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
         {venue.name} · Menu propulsé par MenuShare
       </footer>
       {selected ? (
-        <ItemMediaModal item={selected} onClose={() => setSelected(null)} />
+        <ItemMediaModal
+          item={selected}
+          phone={venue.phone}
+          onClose={() => setSelected(null)}
+        />
       ) : null}
       {coverVideoOpen && venue.coverVideo ? (
         <VideoModal
@@ -337,56 +365,51 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
 
 function ItemMediaModal({
   item,
+  phone,
   onClose,
 }: {
   item: MenuItem;
+  phone: string;
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [videoLoaded, setVideoLoaded] = useState(false);
   const mediaCount = item.images.length + (item.video ? 1 : 0);
   const showingVideo = Boolean(item.video && index === item.images.length);
-  useEffect(() => setVideoLoaded(false), [index]);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
   return (
     <div
-      className="modal-backdrop public-modal-backdrop"
+      className="dish-sheet-backdrop"
       role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
-        className="public-modal"
+        className="dish-sheet"
         role="dialog"
         aria-modal="true"
         aria-labelledby="public-item-title"
       >
         <button
-          className="modal-close-light"
+          className="dish-sheet-close"
           type="button"
           aria-label="Fermer"
           onClick={onClose}
         >
           <X />
         </button>
-        <div className="public-modal-media">
+        <div className="dish-sheet-media">
           {showingVideo && item.video ? (
-            videoLoaded ? (
-              <VideoFrame title={item.name} video={item.video} />
-            ) : (
-              <button
-                className="video-consent"
-                type="button"
-                onClick={() => setVideoLoaded(true)}
-              >
-                <Play fill="currentColor" />
-                <strong>
-                  Lire sur{" "}
-                  {item.video.provider === "youtube" ? "YouTube" : "Vimeo"}
-                </strong>
-                <span>
-                  Le lecteur externe ne se charge qu’après votre clic.
-                </span>
-              </button>
-            )
+            <VideoFrame title={item.name} video={item.video} />
           ) : item.images[index] ? (
             <img
               src={item.images[index].dataUrl}
@@ -415,14 +438,91 @@ function ItemMediaModal({
               </button>
             </>
           ) : null}
+          {mediaCount ? (
+            <div className="dish-media-dots" aria-label="Galerie du plat">
+              {Array.from({ length: mediaCount }, (_, mediaIndex) => (
+                <button
+                  key={mediaIndex}
+                  type="button"
+                  className={mediaIndex === index ? "active" : ""}
+                  aria-label={`Afficher le média ${mediaIndex + 1}`}
+                  onClick={() => setIndex(mediaIndex)}
+                />
+              ))}
+            </div>
+          ) : null}
+          <div className="dish-media-title">
+            {showingVideo ? <span className="eyebrow">Vidéo</span> : null}
+            <h2 className="serif" id="public-item-title">
+              {item.name}
+            </h2>
+            <strong>{formatPrice(item.priceCents)}</strong>
+          </div>
         </div>
-        <div className="public-modal-copy">
-          <span className="eyebrow">À la carte</span>
-          <h2 className="serif" id="public-item-title">
-            {item.name}
-          </h2>
-          <p>{item.description}</p>
-          <strong>{formatPrice(item.priceCents)}</strong>
+        <div className="dish-sheet-copy">
+          <p className="dish-lead">{item.details || item.description}</p>
+          {item.ingredients.length ? (
+            <section className="dish-detail-section">
+              <h3>Ingrédients</h3>
+              <ul className="dish-ingredients">
+                {item.ingredients.map((ingredient) => (
+                  <li key={ingredient}>{ingredient}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {item.pairingName ? (
+            <section className="dish-detail-section dish-pairing">
+              <div>
+                <span className="eyebrow">Suggestion de la maison</span>
+                <h3>Accord mets & vins</h3>
+                <p>{item.pairingName}</p>
+              </div>
+              {item.pairingPriceCents !== undefined ? (
+                <strong>{formatPrice(item.pairingPriceCents)}</strong>
+              ) : null}
+            </section>
+          ) : null}
+          {item.reviewRating !== undefined || item.reviewQuote ? (
+            <section className="dish-detail-section dish-reviews">
+              <h3>Avis clients</h3>
+              <div className="dish-rating">
+                <span className="dish-stars" aria-hidden="true">
+                  {Array.from({ length: 5 }, (_, star) => (
+                    <Star
+                      key={star}
+                      size={17}
+                      fill={
+                        star < Math.round(item.reviewRating ?? 0)
+                          ? "currentColor"
+                          : "none"
+                      }
+                    />
+                  ))}
+                </span>
+                <strong>
+                  {item.reviewRating?.toLocaleString("fr-FR") ?? "—"}/5
+                </strong>
+                {item.reviewCount !== undefined ? (
+                  <small>({item.reviewCount} avis)</small>
+                ) : null}
+              </div>
+              {item.reviewQuote ? (
+                <blockquote>“{item.reviewQuote}”</blockquote>
+              ) : null}
+              {item.reviewAuthor ? <cite>{item.reviewAuthor}</cite> : null}
+            </section>
+          ) : null}
+          <div className="dish-sheet-actions">
+            <button className="button button-primary" type="button">
+              Commander
+            </button>
+            {phone ? (
+              <a className="button" href={`tel:${phone.replace(/\s/g, "")}`}>
+                Appeler le serveur
+              </a>
+            ) : null}
+          </div>
         </div>
       </section>
     </div>
@@ -438,7 +538,6 @@ function VideoModal({
   video: ExternalVideo;
   onClose: () => void;
 }) {
-  const [loaded, setLoaded] = useState(false);
   return (
     <div
       className="modal-backdrop public-modal-backdrop"
@@ -458,21 +557,7 @@ function VideoModal({
         >
           <X />
         </button>
-        {loaded ? (
-          <VideoFrame title={title} video={video} />
-        ) : (
-          <button
-            className="video-consent"
-            type="button"
-            onClick={() => setLoaded(true)}
-          >
-            <Play fill="currentColor" />
-            <strong>
-              Lire sur {video.provider === "youtube" ? "YouTube" : "Vimeo"}
-            </strong>
-            <span>Le lecteur externe ne se charge qu’après votre clic.</span>
-          </button>
-        )}
+        <VideoFrame title={title} video={video} />
       </section>
     </div>
   );
