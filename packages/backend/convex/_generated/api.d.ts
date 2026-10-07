@@ -8,8 +8,11 @@
  * @module
  */
 
+import type * as analytics from "../analytics.js";
 import type * as betterAuth_auth from "../betterAuth/auth.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as lib_analytics from "../lib/analytics.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_video from "../lib/video.js";
 import type * as menus from "../menus.js";
@@ -23,8 +26,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  analytics: typeof analytics;
   "betterAuth/auth": typeof betterAuth_auth;
+  crons: typeof crons;
   http: typeof http;
+  "lib/analytics": typeof lib_analytics;
   "lib/auth": typeof lib_auth;
   "lib/video": typeof lib_video;
   menus: typeof menus;

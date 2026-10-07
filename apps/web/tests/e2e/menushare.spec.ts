@@ -7,8 +7,15 @@ const secondTinySvg = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#76263c"/></svg>',
 );
 
+const EXTERNAL_PLAYER_HOST =
+  /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|vimeocdn\.com)$/;
+
+// Only third-party hosts: bundled player SDK chunks are served locally.
 async function blockExternalPlayers(page: Page) {
-  await page.route(/(youtube|youtu\.be|vimeo)/, (route) => route.abort());
+  await page.route(
+    (url) => EXTERNAL_PLAYER_HOST.test(url.hostname),
+    (route) => route.abort(),
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -384,4 +391,29 @@ test("plusieurs établissements et ancienne URL publique", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Bonjour, Nonna Lydie" }),
   ).toBeVisible();
+});
+
+test("QR codes par table et page statistiques", async ({ page }) => {
+  await page.goto("/dashboard/share");
+  await page.getByLabel("Nombre de tables").fill("3");
+  await page.getByRole("button", { name: "Enregistrer" }).click();
+  await page.getByRole("link", { name: "Imprimer les 3 QR codes" }).click();
+  await expect(page).toHaveTitle("QR codes des tables · MenuShare");
+  const sheet = page.getByTestId("table-qr-sheet");
+  await expect(sheet.locator("svg")).toHaveCount(3);
+  await expect(sheet.getByText("Table 3")).toBeVisible();
+
+  await page.goto("/dashboard/stats");
+  await expect(page).toHaveTitle("Statistiques · MenuShare");
+  await expect(
+    page.getByRole("heading", { name: "Statistiques", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Aucune statistique en mode démo."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "7 jours" }).click();
+  await expect(page.getByRole("button", { name: "7 jours" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
 });

@@ -43,6 +43,7 @@ export type MenuStore = {
     city: string;
   }) => MaybePromise<void>;
   updateVenue: (patch: Partial<Venue>) => MaybePromise<void>;
+  setTableCount: (tableCount: number) => MaybePromise<void>;
   addCategory: (input: {
     name: string;
     eyebrow: string;
@@ -170,6 +171,12 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
         setState((current) =>
           touch({ ...current, venue: { ...current.venue, ...patch } }),
         ),
+      // Tables only affect printed QR codes, so the menu stays published.
+      setTableCount: (tableCount) =>
+        setState((current) => ({
+          ...current,
+          venue: { ...current.venue, tableCount },
+        })),
       addCategory: (input) => {
         const id = uid("category");
         setState((current) =>

@@ -6,7 +6,8 @@
   "exports": {
     "./api": "./convex/_generated/api.js",
     "./data-model": "./convex/_generated/dataModel.d.ts",
-    "./video": "./convex/lib/video.ts"
+    "./video": "./convex/lib/video.ts",
+    "./analytics": "./convex/lib/analytics.ts"
   },
   "scripts": {
     "dev": "convex dev",
@@ -20,8 +21,11 @@
     "zod": "^4.4.2"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^22.15.3",
+    "convex-test": "^0.0.60",
     "typescript": "5.9.2",
+    "vite": "^8",
     "vitest": "^4.1.7"
   }
 }

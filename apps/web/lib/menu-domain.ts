@@ -48,6 +48,7 @@ export type Venue = {
   logoDataUrl?: string;
   coverImageDataUrl?: string;
   coverVideo?: ExternalVideo;
+  tableCount?: number;
 };
 
 export type MenuSnapshot = {

@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@repo/backend/api";
 import { useQuery } from "convex/react";
 
@@ -24,6 +24,12 @@ import {
 } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
 import { convex } from "@/lib/convex";
+import {
+  MenuTrackerProvider,
+  useMenuTracker,
+  useVideoTracking,
+} from "@/components/menu/menu-tracker";
+import { playerApiUrl } from "@/lib/menu-analytics";
 
 export function PublicMenu({ slug }: { slug: string }) {
   if (convex) return <RemotePublicMenu slug={slug} />;
@@ -212,11 +218,16 @@ function RemotePublicMenu({ slug }: { slug: string }) {
       </main>
     );
   }
-  return <PublishedMenu snapshot={snapshot} />;
+  return (
+    <MenuTrackerProvider venueId={snapshot.venue.id}>
+      <PublishedMenu snapshot={snapshot} />
+    </MenuTrackerProvider>
+  );
 }
 
 function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
   const { venue, categories } = snapshot;
+  const tracker = useMenuTracker();
   const [selected, setSelected] = useState<MenuItem | null>(null);
   const [coverVideoOpen, setCoverVideoOpen] = useState(false);
   const availableCategories = categories
@@ -331,7 +342,10 @@ function PublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
                       className="public-item"
                       key={item.id}
                       type="button"
-                      onClick={() => setSelected(item)}
+                      onClick={() => {
+                        setSelected(item);
+                        tracker.itemOpen(item.id);
+                      }}
                       aria-label={`Voir ${item.name}`}
                     >
                       <div
@@ -436,7 +450,7 @@ function ItemMediaModal({
         <div className="dish-sheet-media">
           {showingVideo ? <span className="dish-media-type">Vidéo</span> : null}
           {showingVideo && item.video ? (
-            <VideoFrame title={item.name} video={item.video} />
+            <VideoFrame title={item.name} video={item.video} itemId={item.id} />
           ) : item.images[index] ? (
             <img
               src={item.images[index].dataUrl}
@@ -579,11 +593,25 @@ function VideoModal({
   );
 }
 
-function VideoFrame({ title, video }: { title: string; video: ExternalVideo }) {
+function VideoFrame({
+  title,
+  video,
+  itemId,
+}: {
+  title: string;
+  video: ExternalVideo;
+  itemId?: string;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const { enabled } = useMenuTracker();
+  useVideoTracking(iframeRef, video, itemId);
   return (
     <iframe
+      ref={iframeRef}
       data-testid="video-frame"
-      src={video.embedUrl}
+      src={
+        enabled ? playerApiUrl(video, window.location.origin) : video.embedUrl
+      }
       title={title}
       allow="autoplay; encrypted-media; picture-in-picture"
       allowFullScreen

@@ -64,6 +64,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const updateProfile = useMutation(api.venues.updateProfile);
   const updateAppearance = useMutation(api.venues.updateAppearance);
   const changeSlug = useMutation(api.venues.changeSlug);
+  const setTableCountMutation = useMutation(api.venues.setTableCount);
   const generateImageUploadUrl = useMutation(api.venues.generateImageUploadUrl);
   const addCategoryMutation = useMutation(api.menus.addCategory);
   const updateCategoryMutation = useMutation(api.menus.updateCategory);
@@ -106,6 +107,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
               embedUrl: draft.venue.coverVideoEmbedUrl,
             }
           : undefined,
+      tableCount: draft.venue.tableCount,
     };
 
     const categories: MenuCategory[] = draft.categories.map((category) => ({
@@ -403,6 +405,11 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       async removeItemImage(_categoryId, _itemId, imageId) {
         await removeMedia({ mediaId: imageId as Id<"media"> });
       },
+      async setTableCount(tableCount) {
+        const venueId = state.venue.id as Id<"venues">;
+        if (!venueId) throw new Error("VENUE_NOT_FOUND");
+        await setTableCountMutation({ venueId, tableCount });
+      },
       async publish() {
         if (!menuId) throw new Error("MENU_NOT_FOUND");
         await publishMutation({ menuId });
@@ -429,6 +436,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       reorderCategories,
       reorderItems,
       setExternalVideo,
+      setTableCountMutation,
       state,
       updateAppearance,
       updateCategoryMutation,

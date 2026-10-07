@@ -1,11 +1,22 @@
 "use client";
 
-import { Check, Copy, Download, ExternalLink, QrCode } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Printer,
+  QrCode,
+  Table2,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
+import { menuQrUrl } from "@/lib/menu-analytics";
 import { useMenuStore } from "@/lib/menu-store";
+
+const MAX_TABLES = 200;
 
 export default function SharePage() {
   const { state, publish } = useMenuStore();
@@ -91,7 +102,7 @@ export default function SharePage() {
         <section className="qr-card">
           <div className="qr-frame" ref={qrRef} data-testid="qr-code">
             <QRCodeSVG
-              value={url}
+              value={menuQrUrl(url)}
               size={220}
               level="H"
               bgColor="#fffdf9"
@@ -110,8 +121,8 @@ export default function SharePage() {
           </div>
           <h2>QR code prêt à imprimer</h2>
           <p>
-            Le QR code pointe toujours vers la même URL, même après une mise à
-            jour du menu.
+            Le QR code pointe toujours vers votre menu, même après une mise à
+            jour. Chaque scan est compté dans vos statistiques.
           </p>
           <button
             className="button button-dark"
@@ -122,6 +133,7 @@ export default function SharePage() {
           </button>
         </section>
       </div>
+      <TableQrSettings />
       <div className="info-banner">
         <QrCode />
         <div>
@@ -133,5 +145,80 @@ export default function SharePage() {
         </div>
       </div>
     </>
+  );
+}
+
+function TableQrSettings() {
+  const { state, setTableCount } = useMenuStore();
+  const tableCount = state.venue.tableCount ?? 0;
+  const [value, setValue] = useState(String(tableCount));
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  useEffect(() => setValue(String(tableCount)), [tableCount]);
+  const next = Number(value);
+  const valid = Number.isInteger(next) && next >= 0 && next <= MAX_TABLES;
+
+  return (
+    <section className="settings-card tables-card">
+      <h2>
+        <Table2 size={18} /> Un QR code par table
+      </h2>
+      <p>
+        Numérotez vos tables de 1 à N : chaque QR code indique d’où vient le
+        scan, et les Statistiques comparent vos emplacements.
+      </p>
+      <form
+        className="field-action"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!valid) return;
+          setStatus("saving");
+          try {
+            await setTableCount(next);
+            setStatus("saved");
+            window.setTimeout(() => setStatus("idle"), 1600);
+          } catch {
+            setStatus("error");
+          }
+        }}
+      >
+        <label className="sr-only" htmlFor="table-count">
+          Nombre de tables
+        </label>
+        <input
+          className="input tables-input"
+          id="table-count"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_TABLES}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          aria-describedby="table-count-hint"
+        />
+        <button
+          className="button"
+          type="submit"
+          disabled={!valid || next === tableCount || status === "saving"}
+        >
+          {status === "saved" ? <Check size={16} /> : null}
+          {status === "saved" ? "Enregistré" : "Enregistrer"}
+        </button>
+        {tableCount > 0 ? (
+          <Link className="button button-dark" href="/dashboard/share/tables">
+            <Printer size={16} /> Imprimer les {tableCount} QR codes
+          </Link>
+        ) : null}
+      </form>
+      <small id="table-count-hint" className="tables-hint">
+        Nombre de tables, jusqu’à {MAX_TABLES}.
+      </small>
+      {status === "error" ? (
+        <p className="tables-error" role="alert">
+          Enregistrement impossible, réessayez.
+        </p>
+      ) : null}
+    </section>
   );
 }

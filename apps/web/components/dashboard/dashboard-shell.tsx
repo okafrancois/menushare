@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BarChart3,
   Eye,
   LayoutDashboard,
   Palette,
@@ -18,11 +19,33 @@ import { ProtectedWorkspace } from "@/components/auth/protected-workspace";
 import { useMenuStore } from "@/lib/menu-store";
 
 const links = [
-  { href: "/dashboard", label: "Vue d’ensemble", icon: LayoutDashboard },
-  { href: "/dashboard/menu", label: "Menus", icon: Utensils },
-  { href: "/dashboard/appearance", label: "Apparence", icon: Palette },
-  { href: "/dashboard/share", label: "Partager", icon: QrCode },
-  { href: "/dashboard/settings", label: "Réglages", icon: Settings },
+  {
+    href: "/dashboard",
+    label: "Vue d’ensemble",
+    mobileLabel: "Accueil",
+    icon: LayoutDashboard,
+    mobile: true,
+  },
+  { href: "/dashboard/menu", label: "Menus", icon: Utensils, mobile: true },
+  {
+    href: "/dashboard/appearance",
+    label: "Apparence",
+    icon: Palette,
+    mobile: true,
+  },
+  { href: "/dashboard/share", label: "Partager", icon: QrCode, mobile: true },
+  {
+    href: "/dashboard/stats",
+    label: "Statistiques",
+    icon: BarChart3,
+    mobile: true,
+  },
+  {
+    href: "/dashboard/settings",
+    label: "Réglages",
+    icon: Settings,
+    mobile: false,
+  },
 ] as const;
 
 function VenueSwitcher({ mobile = false }: { mobile?: boolean }) {
@@ -124,16 +147,20 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           className="dashboard-mobile-nav"
           aria-label="Navigation du tableau de bord"
         >
-          {links.slice(0, 4).map(({ href, label, icon: Icon }) => (
-            <Link
-              className={pathname === href ? "active" : ""}
-              href={href}
-              key={href}
-            >
-              <Icon size={17} />
-              <span>{label}</span>
-            </Link>
-          ))}
+          {links
+            .filter((link) => link.mobile)
+            .map((link) => (
+              <Link
+                className={pathname === link.href ? "active" : ""}
+                href={link.href}
+                key={link.href}
+              >
+                <link.icon size={17} />
+                <span>
+                  {"mobileLabel" in link ? link.mobileLabel : link.label}
+                </span>
+              </Link>
+            ))}
         </nav>
       </div>
     </ProtectedWorkspace>

@@ -12,6 +12,19 @@ export const externalVideoProvider = v.union(
   v.literal("vimeo"),
 );
 
+export const analyticsScope = v.union(
+  v.literal("venue"),
+  v.literal("item"),
+  v.literal("cover"),
+  v.literal("table"),
+);
+
+export const analyticsSource = v.union(
+  v.literal("qr"),
+  v.literal("table"),
+  v.literal("direct"),
+);
+
 export default defineSchema({
   venues: defineTable({
     ownerId: v.string(),
@@ -30,6 +43,7 @@ export default defineSchema({
     coverVideoExternalId: v.optional(v.string()),
     coverVideoEmbedUrl: v.optional(v.string()),
     accentColor: v.optional(v.string()),
+    tableCount: v.optional(v.number()),
     status: venueStatus,
   })
     .index("by_owner", ["ownerId"])
@@ -109,4 +123,51 @@ export default defineSchema({
   })
     .index("by_menu_version", ["menuId", "version"])
     .index("by_venue", ["venueId"]),
+
+  // Daily counters, one row per venue/day and per dimension (dish, cover
+  // video, table). Every KPI shown to owners is summed from these rows.
+  analyticsDaily: defineTable({
+    venueId: v.id("venues"),
+    day: v.string(),
+    scope: analyticsScope,
+    key: v.string(),
+    sessions: v.number(),
+    scans: v.number(),
+    visitors: v.number(),
+    // Visitors whose most recent visit falls on this day: summing it over a
+    // window that ends today counts each visitor exactly once.
+    lastSeenVisitors: v.number(),
+    durationMs: v.number(),
+    itemOpens: v.number(),
+    videoPlays: v.number(),
+    videoCompletions: v.number(),
+  })
+    .index("by_venue_and_scope_and_day", ["venueId", "scope", "day"])
+    .index("by_venue_and_scope_and_key_and_day", [
+      "venueId",
+      "scope",
+      "key",
+      "day",
+    ]),
+
+  analyticsVisitors: defineTable({
+    venueId: v.id("venues"),
+    visitorId: v.string(),
+    lastSeenDay: v.string(),
+  })
+    .index("by_venue_and_visitor", ["venueId", "visitorId"])
+    .index("by_last_seen_day", ["lastSeenDay"]),
+
+  analyticsSessions: defineTable({
+    venueId: v.id("venues"),
+    sessionId: v.string(),
+    day: v.string(),
+    startedAt: v.number(),
+    activeMs: v.number(),
+    source: analyticsSource,
+    table: v.optional(v.number()),
+    events: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_started_at", ["startedAt"]),
 });

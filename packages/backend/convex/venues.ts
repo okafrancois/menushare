@@ -4,6 +4,7 @@ import { paginationOptsValidator } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedVenueOrThrow } from "./lib/auth";
+import { MAX_TABLES } from "./lib/analytics";
 import { normalizeExternalVideoUrl } from "./lib/video";
 import { mutation, query } from "./server";
 
@@ -216,6 +217,22 @@ export const updateAppearance = mutation({
     }
     await ctx.db.patch(args.venueId, patch);
     await touchVenueMenu(ctx, args.venueId);
+  },
+});
+
+// Tables only change which QR codes are printed, so the menu stays published.
+export const setTableCount = mutation({
+  args: { venueId: v.id("venues"), tableCount: v.number() },
+  handler: async (ctx, { venueId, tableCount }) => {
+    await ownedVenueOrThrow(ctx, venueId);
+    if (
+      !Number.isInteger(tableCount) ||
+      tableCount < 0 ||
+      tableCount > MAX_TABLES
+    ) {
+      throw new Error("INVALID_TABLE_COUNT");
+    }
+    await ctx.db.patch(venueId, { tableCount });
   },
 });
 
