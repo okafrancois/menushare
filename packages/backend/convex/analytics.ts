@@ -279,6 +279,31 @@ async function periodRows(
     .take(ROW_LIMIT);
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function assertDay(day: string) {
+  if (!DAY.test(day)) throw new Error("INVALID_DAY");
+}
+
+function periodTotals(counters: AnalyticsCounters) {
+  // Completions are reported by browsers and must never exceed plays.
+  const rawCompletionRate = ratio(
+    counters.videoCompletions,
+    counters.videoPlays,
+  );
+  return {
+    scans: counters.scans,
+    visits: counters.sessions,
+    uniqueVisitors: counters.lastSeenVisitors,
+    averageDurationMs: ratio(counters.durationMs, counters.sessions),
+    itemOpens: counters.itemOpens,
+    videoPlays: counters.videoPlays,
+    videoCompletions: counters.videoCompletions,
+    completionRate:
+      rawCompletionRate === null ? null : Math.min(1, rawCompletionRate),
+  };
+}
+
 function groupByKey(rows: Doc<"analyticsDaily">[]) {
   const totals = new Map<string, AnalyticsCounters>();
   for (const row of rows) {
@@ -299,7 +324,7 @@ export const getStats = query({
   },
   handler: async (ctx, { venueId, today, days }) => {
     const { venue } = await ownedVenueOrThrow(ctx, venueId);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new Error("INVALID_DAY");
+    assertDay(today);
     if (!(ANALYTICS_PERIODS as readonly number[]).includes(days)) {
       throw new Error("INVALID_PERIOD");
     }
@@ -311,12 +336,16 @@ export const getStats = query({
         periodRows(ctx, venueId, scope, start, today),
       ),
     );
+    // The period of the same length that ends the day before `start`.
+    const previousRows = await periodRows(
+      ctx,
+      venueId,
+      "venue",
+      shiftDay(start, -days),
+      shiftDay(start, -1),
+    );
 
     const totals = venueRows.reduce(addCounters, EMPTY_COUNTERS);
-    // Completions are reported by browsers and must never exceed plays.
-    const rawCompletionRate = ratio(totals.videoCompletions, totals.videoPlays);
-    const completionRate =
-      rawCompletionRate === null ? null : Math.min(1, rawCompletionRate);
     const byDay = new Map(venueRows.map((row) => [row.day, row]));
 
     const dishes = await Promise.all(
@@ -343,19 +372,13 @@ export const getStats = query({
 
     return {
       period: { start, end: today, days },
-      truncated: [venueRows, itemRows, coverRows, tableRows].some(
+      truncated: [venueRows, itemRows, coverRows, tableRows, previousRows].some(
         (rows) => rows.length === ROW_LIMIT,
       ),
-      totals: {
-        scans: totals.scans,
-        visits: totals.sessions,
-        uniqueVisitors: totals.lastSeenVisitors,
-        averageDurationMs: ratio(totals.durationMs, totals.sessions),
-        itemOpens: totals.itemOpens,
-        videoPlays: totals.videoPlays,
-        videoCompletions: totals.videoCompletions,
-        completionRate,
-      },
+      totals: periodTotals(totals),
+      previousTotals: periodTotals(
+        previousRows.reduce(addCounters, EMPTY_COUNTERS),
+      ),
       daily: calendar.map((day) => ({
         day,
         visits: byDay.get(day)?.sessions ?? 0,
@@ -382,6 +405,94 @@ export const getStats = query({
           };
         }),
     };
+  },
+});
+
+const daySummary = v.object({
+  scans: v.number(),
+  visits: v.number(),
+  itemOpens: v.number(),
+  averageDurationMs: v.union(v.number(), v.null()),
+});
+
+/** Today's activity next to the same weekday one week earlier. */
+export const getDaySummary = query({
+  args: {
+    venueId: v.id("venues"),
+    // The browser supplies its current day so the query stays deterministic.
+    today: v.string(),
+  },
+  returns: v.object({ today: daySummary, sameDayLastWeek: daySummary }),
+  handler: async (ctx, { venueId, today }) => {
+    await ownedVenueOrThrow(ctx, venueId);
+    assertDay(today);
+    const summary = async (day: string) => {
+      const row = await ctx.db
+        .query("analyticsDaily")
+        .withIndex("by_venue_and_scope_and_key_and_day", (q) =>
+          q
+            .eq("venueId", venueId)
+            .eq("scope", "venue")
+            .eq("key", "")
+            .eq("day", day),
+        )
+        .unique();
+      const counters = row ?? EMPTY_COUNTERS;
+      return {
+        scans: counters.scans,
+        visits: counters.sessions,
+        itemOpens: counters.itemOpens,
+        averageDurationMs: ratio(counters.durationMs, counters.sessions),
+      };
+    };
+    return {
+      today: await summary(today),
+      sameDayLastWeek: await summary(shiftDay(today, -7)),
+    };
+  },
+});
+
+const POPULAR_DAYS = 14;
+const POPULAR_MIN_OPENS = 3;
+const POPULAR_LIMIT = 4;
+const POPULAR_ROW_LIMIT = 3000;
+
+/**
+ * Public: the most opened dishes of a published menu over the last two weeks,
+ * most popular first. Only identifiers are exposed, never the counters.
+ */
+export const popularItems = query({
+  args: { venueId: v.string(), today: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    if (!DAY.test(args.today)) return [];
+    const venueId = ctx.db.normalizeId("venues", args.venueId);
+    const venue = venueId ? await ctx.db.get("venues", venueId) : null;
+    if (!venueId || !venue || venue.status !== "published") return [];
+
+    const rows = await ctx.db
+      .query("analyticsDaily")
+      .withIndex("by_venue_and_scope_and_day", (q) =>
+        q
+          .eq("venueId", venueId)
+          .eq("scope", "item")
+          .gte("day", shiftDay(args.today, 1 - POPULAR_DAYS))
+          .lte("day", args.today),
+      )
+      .take(POPULAR_ROW_LIMIT);
+    const ranked = [...groupByKey(rows)]
+      .map(([itemId, counters]) => ({ itemId, opens: counters.itemOpens }))
+      .filter(({ opens }) => opens >= POPULAR_MIN_OPENS)
+      .sort((a, b) => b.opens - a.opens || a.itemId.localeCompare(b.itemId));
+
+    // Deleted dishes keep their counters; skip them.
+    const popular: string[] = [];
+    for (const { itemId } of ranked) {
+      if (popular.length === POPULAR_LIMIT) break;
+      const id = ctx.db.normalizeId("menuItems", itemId);
+      if (id && (await ctx.db.get("menuItems", id))) popular.push(itemId);
+    }
+    return popular;
   },
 });
 

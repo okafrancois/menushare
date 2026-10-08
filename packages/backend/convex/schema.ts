@@ -25,6 +25,14 @@ export const analyticsSource = v.union(
   v.literal("direct"),
 );
 
+// Weekly opening hours, see normalizeOpeningHours in lib/menu.ts.
+export const openingHours = v.array(
+  v.object({
+    day: v.number(),
+    ranges: v.array(v.object({ open: v.string(), close: v.string() })),
+  }),
+);
+
 export default defineSchema({
   venues: defineTable({
     ownerId: v.string(),
@@ -44,6 +52,10 @@ export default defineSchema({
     coverVideoEmbedUrl: v.optional(v.string()),
     accentColor: v.optional(v.string()),
     tableCount: v.optional(v.number()),
+    openingHours: v.optional(openingHours),
+    // Sold-out dishes come back automatically every night unless disabled.
+    // Absent means true.
+    autoRestock: v.optional(v.boolean()),
     status: venueStatus,
   })
     .index("by_owner", ["ownerId"])
@@ -88,6 +100,7 @@ export default defineSchema({
     priceCents: v.number(),
     order: v.number(),
     active: v.boolean(),
+    // Absent: not provided by the owner; []: no major allergen.
     allergens: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
     ingredients: v.optional(v.array(v.string())),
@@ -123,6 +136,31 @@ export default defineSchema({
   })
     .index("by_menu_version", ["menuId", "version"])
     .index("by_venue", ["venueId"]),
+
+  // Live service state, outside drafts and published snapshots: changing it
+  // never sends the menu back to draft.
+  soldOutItems: defineTable({
+    venueId: v.id("venues"),
+    itemId: v.id("menuItems"),
+    since: v.number(),
+    // Copied from the venue so the nightly restock can use a single index.
+    autoRestock: v.boolean(),
+  })
+    .index("by_venue", ["venueId"])
+    .index("by_item", ["itemId"])
+    .index("by_auto_restock", ["autoRestock"]),
+
+  // At most one daily special per venue, removed by a scheduled job at endsAt.
+  dailySpecials: defineTable({
+    venueId: v.id("venues"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    priceCents: v.number(),
+    imageStorageId: v.optional(v.id("_storage")),
+    endsAt: v.number(),
+    createdAt: v.number(),
+    expiryJobId: v.optional(v.id("_scheduled_functions")),
+  }).index("by_venue", ["venueId"]),
 
   // Daily counters, one row per venue/day and per dimension (dish, cover
   // video, table). Every KPI shown to owners is summed from these rows.

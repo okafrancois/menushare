@@ -13,4 +13,13 @@ crons.cron(
   {},
 );
 
+// Sold-out dishes come back before the next service, except for venues that
+// turned automatic restocking off.
+crons.cron(
+  "restock sold out items",
+  "0 3 * * *",
+  internal.service.restockAll,
+  {},
+);
+
 export default crons;

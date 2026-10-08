@@ -1,8 +1,17 @@
+import type { WithoutSystemFields } from "convex/server";
 import { v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedMenuOrThrow } from "./lib/auth";
+import { normalizeAllergens, normalizeTags } from "./lib/menu";
+import {
+  clearSoldOut,
+  currentSpecial,
+  soldOutItemIds,
+  specialView,
+} from "./lib/service";
+import { assertFreshUpload, withoutPrivateFields } from "./lib/storage";
 import { normalizeExternalVideoUrl } from "./lib/video";
 import { mutation, query } from "./server";
 
@@ -13,6 +22,10 @@ async function mediaWithUrl(ctx: QueryCtx | MutationCtx, media: Doc<"media">) {
       ? await ctx.storage.getUrl(media.imageStorageId)
       : undefined,
   };
+}
+
+function cents(value: number) {
+  return Math.max(0, Math.round(value));
 }
 
 async function touchMenu(ctx: MutationCtx, menuId: Id<"menus">) {
@@ -170,6 +183,7 @@ export const deleteCategory = mutation({
           await ctx.storage.delete(asset.imageStorageId);
         await ctx.db.delete(asset._id);
       }
+      await clearSoldOut(ctx, item._id);
       await ctx.db.delete(item._id);
     }
     await ctx.db.delete(categoryId);
@@ -184,6 +198,8 @@ export const addItem = mutation({
     description: v.optional(v.string()),
     details: v.optional(v.string()),
     priceCents: v.number(),
+    allergens: v.optional(v.array(v.string())),
+    tags: v.optional(v.array(v.string())),
     ingredients: v.optional(v.array(v.string())),
     pairingName: v.optional(v.string()),
     pairingPriceCents: v.optional(v.number()),
@@ -207,7 +223,12 @@ export const addItem = mutation({
       name: args.name.trim(),
       description: args.description?.trim(),
       details: args.details?.trim(),
-      priceCents: Math.max(0, Math.round(args.priceCents)),
+      priceCents: cents(args.priceCents),
+      allergens:
+        args.allergens === undefined
+          ? undefined
+          : normalizeAllergens(args.allergens),
+      tags: args.tags === undefined ? undefined : normalizeTags(args.tags),
       ingredients: args.ingredients
         ?.map((value) => value.trim())
         .filter(Boolean),
@@ -215,7 +236,7 @@ export const addItem = mutation({
       pairingPriceCents:
         args.pairingPriceCents === undefined
           ? undefined
-          : Math.max(0, Math.round(args.pairingPriceCents)),
+          : cents(args.pairingPriceCents),
       reviewRating: args.reviewRating,
       reviewCount: args.reviewCount,
       reviewQuote: args.reviewQuote?.trim(),
@@ -236,38 +257,65 @@ export const updateItem = mutation({
     details: v.optional(v.string()),
     priceCents: v.optional(v.number()),
     active: v.optional(v.boolean()),
+    // null: allergens not provided (distinct from [], no major allergen).
+    allergens: v.optional(v.union(v.array(v.string()), v.null())),
+    tags: v.optional(v.array(v.string())),
     ingredients: v.optional(v.array(v.string())),
     pairingName: v.optional(v.string()),
-    pairingPriceCents: v.optional(v.number()),
-    reviewRating: v.optional(v.number()),
-    reviewCount: v.optional(v.number()),
+    pairingPriceCents: v.optional(v.union(v.number(), v.null())),
+    reviewRating: v.optional(v.union(v.number(), v.null())),
+    reviewCount: v.optional(v.union(v.number(), v.null())),
     reviewQuote: v.optional(v.string()),
     reviewAuthor: v.optional(v.string()),
   },
-  handler: async (ctx, { itemId, ...patch }) => {
+  // Omitted arguments leave their field unchanged; an empty optional text or
+  // a null value removes the field.
+  handler: async (ctx, { itemId, ...args }) => {
     const { menuId } = await menuIdForItem(ctx, itemId);
-    await ctx.db.patch(itemId, {
-      ...patch,
-      name: patch.name?.trim(),
-      description: patch.description?.trim(),
-      details: patch.details?.trim(),
-      ingredients: patch.ingredients
-        ?.map((value) => value.trim())
-        .filter(Boolean),
-      pairingName: patch.pairingName?.trim(),
-      pairingPriceCents:
-        patch.pairingPriceCents === undefined
+    const patch: Partial<WithoutSystemFields<Doc<"menuItems">>> = {};
+    if (args.name !== undefined) {
+      const name = args.name.trim();
+      if (!name) throw new Error("INVALID_NAME");
+      patch.name = name;
+    }
+    for (const key of [
+      "description",
+      "details",
+      "pairingName",
+      "reviewQuote",
+      "reviewAuthor",
+    ] as const) {
+      const value = args[key];
+      if (value !== undefined) patch[key] = value.trim() || undefined;
+    }
+    if (args.priceCents !== undefined)
+      patch.priceCents = cents(args.priceCents);
+    if (args.active !== undefined) patch.active = args.active;
+    if (args.pairingPriceCents !== undefined) {
+      patch.pairingPriceCents =
+        args.pairingPriceCents === null
           ? undefined
-          : Math.max(0, Math.round(patch.pairingPriceCents)),
-      reviewRating: patch.reviewRating,
-      reviewCount: patch.reviewCount,
-      reviewQuote: patch.reviewQuote?.trim(),
-      reviewAuthor: patch.reviewAuthor?.trim(),
-      priceCents:
-        patch.priceCents === undefined
+          : cents(args.pairingPriceCents);
+    }
+    if (args.reviewRating !== undefined) {
+      patch.reviewRating = args.reviewRating ?? undefined;
+    }
+    if (args.reviewCount !== undefined) {
+      patch.reviewCount = args.reviewCount ?? undefined;
+    }
+    if (args.allergens !== undefined) {
+      patch.allergens =
+        args.allergens === null
           ? undefined
-          : Math.max(0, Math.round(patch.priceCents)),
-    });
+          : normalizeAllergens(args.allergens);
+    }
+    if (args.tags !== undefined) patch.tags = normalizeTags(args.tags);
+    if (args.ingredients !== undefined) {
+      patch.ingredients = args.ingredients
+        .map((value) => value.trim())
+        .filter(Boolean);
+    }
+    await ctx.db.patch(itemId, patch);
     await touchMenu(ctx, menuId);
   },
 });
@@ -308,6 +356,7 @@ export const deleteItem = mutation({
       if (asset.imageStorageId) await ctx.storage.delete(asset.imageStorageId);
       await ctx.db.delete(asset._id);
     }
+    await clearSoldOut(ctx, itemId);
     await ctx.db.delete(itemId);
     await touchMenu(ctx, category.menuId);
   },
@@ -386,15 +435,7 @@ export const addItemImage = mutation({
     const category = await ctx.db.get(item.categoryId);
     if (!category) throw new Error("NOT_FOUND");
     const { venue } = await ownedMenuOrThrow(ctx, category.menuId);
-    const metadata = await ctx.db.system.get(storageId);
-    if (
-      !metadata ||
-      !metadata.contentType?.startsWith("image/") ||
-      metadata.size > 2 * 1024 * 1024
-    ) {
-      await ctx.storage.delete(storageId);
-      throw new Error("INVALID_IMAGE");
-    }
+    await assertFreshUpload(ctx, storageId, { requireImage: true });
     const media = await ctx.db
       .query("media")
       .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
@@ -542,6 +583,28 @@ export const getPublishedBySlug = query({
     const menu = menus.find((candidate) => candidate.publishedSnapshotId);
     if (!menu?.publishedSnapshotId) return null;
     const snapshot = await ctx.db.get(menu.publishedSnapshotId);
-    return snapshot ? { ...snapshot.data, redirectedFrom } : null;
+    if (!snapshot) return null;
+    // Sold-out dishes and the daily special are live service state: they are
+    // read on every request instead of being frozen in the snapshot. Expired
+    // specials are removed by a scheduled job, so no clock is read here.
+    const special = await currentSpecial(ctx, venue._id);
+    return {
+      // Storage identifiers and the owner id stay private.
+      ...withoutPrivateFields(snapshot.data),
+      redirectedFrom,
+      soldOutItemIds: await soldOutItemIds(ctx, venue._id),
+      special: special ? await specialView(ctx, special) : null,
+    };
+  },
+});
+
+/** The menu as currently published, to compare it with the draft. */
+export const getPublishedSnapshot = query({
+  args: { menuId: v.id("menus") },
+  handler: async (ctx, { menuId }) => {
+    const { menu } = await ownedMenuOrThrow(ctx, menuId);
+    if (!menu.publishedSnapshotId) return null;
+    const snapshot = await ctx.db.get(menu.publishedSnapshotId);
+    return snapshot ? snapshot.data : null;
   },
 });

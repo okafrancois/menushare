@@ -14,9 +14,13 @@ import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_analytics from "../lib/analytics.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_menu from "../lib/menu.js";
+import type * as lib_service from "../lib/service.js";
+import type * as lib_storage from "../lib/storage.js";
 import type * as lib_video from "../lib/video.js";
 import type * as menus from "../menus.js";
 import type * as server from "../server.js";
+import type * as service from "../service.js";
 import type * as venues from "../venues.js";
 
 import type {
@@ -32,9 +36,13 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/analytics": typeof lib_analytics;
   "lib/auth": typeof lib_auth;
+  "lib/menu": typeof lib_menu;
+  "lib/service": typeof lib_service;
+  "lib/storage": typeof lib_storage;
   "lib/video": typeof lib_video;
   menus: typeof menus;
   server: typeof server;
+  service: typeof service;
   venues: typeof venues;
 }>;
 

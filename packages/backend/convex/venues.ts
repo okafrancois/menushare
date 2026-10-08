@@ -5,7 +5,10 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedVenueOrThrow } from "./lib/auth";
 import { MAX_TABLES } from "./lib/analytics";
+import { normalizeOpeningHours } from "./lib/menu";
+import { assertFreshUpload } from "./lib/storage";
 import { normalizeExternalVideoUrl } from "./lib/video";
+import { openingHours as openingHoursValidator } from "./schema";
 import { mutation, query } from "./server";
 
 const RESERVED_SLUGS = new Set([
@@ -44,6 +47,10 @@ async function touchVenueMenu(ctx: MutationCtx, venueId: Id<"venues">) {
   if (menu) {
     await ctx.db.patch(menu._id, { status: "draft", updatedAt: Date.now() });
   }
+}
+
+function clearedIfEmpty<T>(values: T[]) {
+  return values.length > 0 ? values : undefined;
 }
 
 // Kept for clients deployed before multi-establishment pagination.
@@ -173,10 +180,19 @@ export const updateProfile = mutation({
     address: v.optional(v.string()),
     hours: v.optional(v.string()),
     accentColor: v.optional(v.string()),
+    // An empty list clears the opening hours.
+    openingHours: v.optional(openingHoursValidator),
   },
-  handler: async (ctx, { venueId, ...patch }) => {
+  handler: async (ctx, { venueId, openingHours, ...patch }) => {
     await ownedVenueOrThrow(ctx, venueId);
-    await ctx.db.patch(venueId, patch);
+    await ctx.db.patch(venueId, {
+      ...patch,
+      ...(openingHours === undefined
+        ? {}
+        : {
+            openingHours: clearedIfEmpty(normalizeOpeningHours(openingHours)),
+          }),
+    });
     await touchVenueMenu(ctx, venueId);
   },
 });
@@ -193,7 +209,18 @@ export const updateAppearance = mutation({
     removeCoverVideo: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    await ownedVenueOrThrow(ctx, args.venueId);
+    const { venue } = await ownedVenueOrThrow(ctx, args.venueId);
+    // Re-sending the current file is allowed; any other file must be a fresh
+    // upload (see assertFreshUpload).
+    for (const storageId of [args.logoStorageId, args.coverImageStorageId]) {
+      if (
+        storageId &&
+        storageId !== venue.logoStorageId &&
+        storageId !== venue.coverImageStorageId
+      ) {
+        await assertFreshUpload(ctx, storageId, { requireImage: false });
+      }
+    }
     const patch: Record<string, unknown> = {};
     if (args.accentColor !== undefined) {
       if (!/^#[0-9a-f]{6}$/i.test(args.accentColor))
