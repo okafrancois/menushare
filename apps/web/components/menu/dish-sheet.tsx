@@ -107,7 +107,7 @@ export function DishSheet({
             <span className="pm-sheet-handle on-media" aria-hidden="true" />
             <CloseButton onClose={onClose} className="pm-close on-media" />
             {slides.length > 1 ? (
-              <div className="pm-dots" aria-label="Galerie du plat">
+              <div className="pm-dots" role="group" aria-label="Galerie du plat">
                 {slides.map((entry, index) => (
                   <button
                     key={index}
@@ -268,7 +268,7 @@ export function DishSheet({
           </p>
         ) : (
           <div className="pm-foot-row">
-            <div className="pm-stepper" aria-label="Quantité">
+            <div className="pm-stepper" role="group" aria-label="Quantité">
               <button
                 type="button"
                 aria-label="Diminuer la quantité"

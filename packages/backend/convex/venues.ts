@@ -218,7 +218,7 @@ export const updateAppearance = mutation({
         storageId !== venue.logoStorageId &&
         storageId !== venue.coverImageStorageId
       ) {
-        await assertFreshUpload(ctx, storageId, { requireImage: false });
+        await assertFreshUpload(ctx, storageId, { requireImage: true });
       }
     }
     const patch: Record<string, unknown> = {};

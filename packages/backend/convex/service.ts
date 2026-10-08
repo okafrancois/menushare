@@ -3,41 +3,32 @@
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { ownedMenuOrThrow, ownedVenueOrThrow } from "./lib/auth";
 import { SPECIAL_MAX_DURATION_MS, SPECIAL_NAME_MAX } from "./lib/menu";
 import { currentSpecial, soldOutItemIds, specialView } from "./lib/service";
-import { assertFreshUpload } from "./lib/storage";
+import { assertFreshUpload, deleteFileIfPresent } from "./lib/storage";
 import { internalMutation, mutation, query } from "./server";
 
 const RESTOCK_BATCH = 500;
 
-async function deleteFileIfPresent(
-  ctx: MutationCtx,
-  storageId: Id<"_storage">,
-) {
-  if (await ctx.db.system.get("_storage", storageId)) {
-    await ctx.storage.delete(storageId);
+async function cancelExpiry(ctx: MutationCtx, special: Doc<"dailySpecials">) {
+  if (!special.expiryJobId) return;
+  const job = await ctx.db.system.get(
+    "_scheduled_functions",
+    special.expiryJobId,
+  );
+  // The expiry job itself is in progress when it deletes the special.
+  if (job?.state.kind === "pending") {
+    await ctx.scheduler.cancel(special.expiryJobId);
   }
 }
 
-/** Deletes a special, its pending expiry job and its image unless kept. */
-async function deleteSpecial(
-  ctx: MutationCtx,
-  special: Doc<"dailySpecials">,
-  keptImageId?: Id<"_storage">,
-) {
-  if (special.expiryJobId) {
-    const job = await ctx.db.system.get(
-      "_scheduled_functions",
-      special.expiryJobId,
-    );
-    if (job?.state.kind === "pending") {
-      await ctx.scheduler.cancel(special.expiryJobId);
-    }
-  }
-  if (special.imageStorageId && special.imageStorageId !== keptImageId) {
+/** Deletes a special, its pending expiry job and its image. */
+async function deleteSpecial(ctx: MutationCtx, special: Doc<"dailySpecials">) {
+  await cancelExpiry(ctx, special);
+  if (special.imageStorageId) {
     await deleteFileIfPresent(ctx, special.imageStorageId);
   }
   await ctx.db.delete("dailySpecials", special._id);
@@ -177,22 +168,34 @@ export const setDailySpecial = mutation({
       await assertFreshUpload(ctx, args.imageStorageId, { requireImage: true });
     }
 
-    if (existing) await deleteSpecial(ctx, existing, args.imageStorageId);
-    const specialId = await ctx.db.insert("dailySpecials", {
-      venueId: args.venueId,
+    const fields = {
       name,
       description: args.description?.trim() || undefined,
       priceCents: Math.max(0, Math.round(args.priceCents)),
       imageStorageId: args.imageStorageId,
       endsAt: args.endsAt,
-      createdAt: now,
-    });
+    };
+    // Editing keeps the same special (and id); its expiry is rescheduled and
+    // its photo deleted only if replaced or removed.
+    if (existing) {
+      await cancelExpiry(ctx, existing);
+      if (existing.imageStorageId && !keepsImage) {
+        await deleteFileIfPresent(ctx, existing.imageStorageId);
+      }
+    }
+    const specialId =
+      existing?._id ??
+      (await ctx.db.insert("dailySpecials", {
+        venueId: args.venueId,
+        ...fields,
+        createdAt: now,
+      }));
     const expiryJobId = await ctx.scheduler.runAt(
       args.endsAt,
       internal.service.expireSpecial,
       { specialId },
     );
-    await ctx.db.patch("dailySpecials", specialId, { expiryJobId });
+    await ctx.db.patch("dailySpecials", specialId, { ...fields, expiryJobId });
     return specialId;
   },
 });

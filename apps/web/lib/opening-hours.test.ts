@@ -85,6 +85,8 @@ describe("horaires d’ouverture", () => {
   it("propose la fermeture du jour comme fin de suggestion", () => {
     expect(closingTimeToday(TRATTORIA, at("13:00"))).toBe("22:30");
     expect(closingTimeToday(TRATTORIA, at("23:30"))).toBeNull();
+    // Sunday 00:30: Saturday's service runs until 1:30.
+    expect(closingTimeToday(TRATTORIA, at("00:30", 11))).toBe("01:30");
   });
 
   it("calcule la prochaine occurrence d’une heure", () => {

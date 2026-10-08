@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@repo/backend/api";
-import { useQuery } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import {
   CalendarDays,
   ClipboardList,
@@ -139,26 +139,45 @@ function RemotePublicMenu({ slug }: { slug: string }) {
   }
   return (
     <MenuTrackerProvider venueId={snapshot.venue.id}>
-      <RemotePublishedMenu snapshot={snapshot} live={toLiveData(result)} />
+      <RemotePublishedMenu snapshot={snapshot} />
     </MenuTrackerProvider>
   );
 }
 
-function RemotePublishedMenu({
-  snapshot,
-  live,
-}: {
-  snapshot: MenuSnapshot;
-  live: PublicLive;
-}) {
-  const today = useToday();
-  const popular = useQuery(
-    api.analytics.popularItems,
-    today ? { venueId: snapshot.venue.id, today } : "skip",
-  );
+/**
+ * Sold-out dishes and the suggestion of the day come from their own live
+ * query, so a toggle does not resend the whole menu to every diner.
+ */
+function RemotePublishedMenu({ snapshot }: { snapshot: MenuSnapshot }) {
+  const venueId = snapshot.venue.id;
+  const liveResult: unknown = useQuery(api.menus.getLiveService, { venueId });
+  const live = useMemo(() => toLiveData(liveResult), [liveResult]);
+  const popularIds = usePopularItems(venueId);
   return (
-    <PublishedMenu snapshot={snapshot} live={live} popularIds={popular ?? []} />
+    <PublishedMenu snapshot={snapshot} live={live} popularIds={popularIds} />
   );
+}
+
+/**
+ * Read once per visit rather than subscribed: every dish opening changes the
+ * ranking, and a live subscription would re-run it for every diner.
+ */
+function usePopularItems(venueId: string) {
+  const client = useConvex();
+  const [ids, setIds] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    client
+      .query(api.analytics.popularItems, { venueId, today: statsDay(Date.now()) })
+      .then((result) => {
+        if (!cancelled) setIds(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, venueId]);
+  return ids;
 }
 
 /** Current time, refreshed every minute; `null` until mounted. */
@@ -170,11 +189,6 @@ function useNow() {
     return () => window.clearInterval(timer);
   }, []);
   return now;
-}
-
-function useToday() {
-  const now = useNow();
-  return now === null ? null : statsDay(now);
 }
 
 type VisitContext = { table?: number; inVenue: boolean };
@@ -496,13 +510,21 @@ function PublishedMenu({
     }
   }
 
+  // A dish sold out after being picked stays visible, flagged, but leaves
+  // the total and the waiter view.
   const lines: SelectionLine[] = Object.entries(selection)
     .filter(([id]) => orderables.has(id))
-    .map(([id, quantity]) => ({ id, quantity, ...orderables.get(id)! }));
+    .map(([id, quantity]) => ({
+      id,
+      quantity,
+      soldOut: soldOut.has(id),
+      ...orderables.get(id)!,
+    }));
+  const availableLines = lines.filter((line) => !line.soldOut);
   const count = selectionCount(
-    Object.fromEntries(lines.map((line) => [line.id, line.quantity])),
+    Object.fromEntries(availableLines.map((line) => [line.id, line.quantity])),
   );
-  const totalCents = lines.reduce(
+  const totalCents = availableLines.reduce(
     (sum, line) => sum + line.priceCents * line.quantity,
     0,
   );
@@ -663,9 +685,14 @@ function PublishedMenu({
             Sans gluten
           </button>
           <button
-            className="pm-chip"
+            className={`pm-chip ${avoidedOthers > 0 ? "on" : ""}`}
             type="button"
-            aria-pressed={avoidedOthers > 0}
+            aria-haspopup="dialog"
+            aria-label={
+              avoidedOthers
+                ? `Allergies, ${avoidedOthers} allergène${avoidedOthers > 1 ? "s" : ""} évité${avoidedOthers > 1 ? "s" : ""}`
+                : "Allergies"
+            }
             onClick={() => setPanel("allergens")}
           >
             <ShieldAlert size={15} /> Allergies
@@ -813,9 +840,10 @@ function PublishedMenu({
         </footer>
       </div>
 
-      {count > 0 && !panel && !sheetDish ? (
+      {/* Kept mounted while a panel is open so focus can return to it. */}
+      {lines.length > 0 ? (
         <button
-          className="pm-pill"
+          className={`pm-pill ${panel || sheetDish ? "concealed" : ""}`}
           type="button"
           aria-label={`Ouvrir ma sélection : ${count} article${count > 1 ? "s" : ""}, ${formatPrice(totalCents)}`}
           onClick={() => setPanel("selection")}
@@ -862,7 +890,8 @@ function PublishedMenu({
       {panel === "waiter" ? (
         <WaiterView
           table={context?.table}
-          lines={lines}
+          lines={availableLines}
+          soldOutCount={lines.length - availableLines.length}
           onClose={() => setPanel("selection")}
         />
       ) : null}

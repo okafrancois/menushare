@@ -206,7 +206,7 @@ export function toDailySpecial(
   };
 }
 
-/** Live service data returned next to the published snapshot. */
+/** Live service data (`menus.getLiveService`): sold-out dishes and special. */
 export function toLiveData(value: unknown): {
   soldOutIds: string[];
   special?: DailySpecial;

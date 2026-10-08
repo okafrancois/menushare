@@ -191,7 +191,8 @@
   padding: 0;
   justify-content: center;
 }
-.pm-chip[aria-pressed="true"] {
+.pm-chip[aria-pressed="true"],
+.pm-chip.on {
   border-color: var(--ink) !important;
   background: var(--ink) !important;
   color: var(--surface) !important;
@@ -822,6 +823,9 @@
   white-space: nowrap;
   animation: pm-pop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+.pm-pill.concealed {
+  visibility: hidden;
+}
 .pm-pill-count {
   display: grid;
   place-items: center;
@@ -1340,6 +1344,14 @@
 .pm-selection li span {
   color: var(--ink-3);
   font-size: 13px;
+}
+.pm-selection li.sold-out strong {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+.pm-selection li.sold-out span {
+  color: var(--danger);
+  font-weight: 600;
 }
 .pm-total {
   display: flex;

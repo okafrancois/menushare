@@ -178,9 +178,20 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
         setState(next);
       },
       updateVenue: (patch) =>
-        setState((current) =>
-          touch({ ...current, venue: { ...current.venue, ...patch } }),
-        ),
+        setState((current) => {
+          const next = touch({
+            ...current,
+            venue: { ...current.venue, ...patch },
+          });
+          // Like the server, a new menu address applies to the live menu
+          // immediately instead of waiting for the next publication.
+          if (patch.slug && next.published && patch.slug !== current.venue.slug)
+            next.published = {
+              ...next.published,
+              venue: { ...next.published.venue, slug: patch.slug },
+            };
+          return next;
+        }),
       // Tables only affect printed QR codes, so the menu stays published.
       setTableCount: (tableCount) =>
         setState((current) => ({

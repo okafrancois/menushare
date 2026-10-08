@@ -8,10 +8,11 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
+
+import { useModal } from "@/lib/use-modal";
 
 /** Bottom sheet on phones, centred dialog on desktop. */
 export function ProSheet({
@@ -30,29 +31,7 @@ export function ProSheet({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLElement>(null);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const target =
-      panel.current?.querySelector<HTMLElement>("[data-autofocus]") ??
-      panel.current;
-    target?.focus({ preventScroll: true });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCloseRef.current();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-      opener?.focus?.({ preventScroll: true });
-    };
-  }, []);
+  useModal(panel, onClose);
 
   return (
     <div

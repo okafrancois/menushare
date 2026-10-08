@@ -9,6 +9,8 @@ import {
   createUser,
   newConvexTest,
   NOW,
+  storeFile,
+  storeImage,
 } from "./test.helpers";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -24,14 +26,11 @@ async function setup() {
 
 type Setup = Awaited<ReturnType<typeof setup>>;
 
-const publicMenu = ({ t, slug }: Setup) =>
-  t.query(api.menus.getPublishedBySlug, { slug });
+const liveService = ({ t, venueId }: Setup) =>
+  t.query(api.menus.getLiveService, { venueId });
 
 const serviceState = ({ owner, venueId }: Setup) =>
   owner.client.query(api.service.getServiceState, { venueId });
-
-const storeFile = (t: Setup["t"]) =>
-  t.run((ctx) => ctx.storage.store(new Blob(["fake image"])));
 
 const fileExists = (t: Setup["t"], storageId: Id<"_storage">) =>
   t.run(async (ctx) => (await ctx.db.system.get(storageId)) !== null);
@@ -41,16 +40,6 @@ const specials = (t: Setup["t"]) =>
 
 const jobState = (t: Setup["t"], jobId: Id<"_scheduled_functions">) =>
   t.run(async (ctx) => (await ctx.db.system.get(jobId))?.state.kind);
-
-/**
- * convex-test stores files without a content type, so an accepted image is
- * attached to the special directly, as setDailySpecial would have done.
- */
-async function attachImage(t: Setup["t"], specialId: Id<"dailySpecials">) {
-  const storageId = await storeFile(t);
-  await t.run((ctx) => ctx.db.patch(specialId, { imageStorageId: storageId }));
-  return storageId;
-}
 
 function special(
   ctx: Setup,
@@ -102,7 +91,7 @@ describe("sold-out dishes", () => {
       updatedAt: menuBefore!.updatedAt,
       version: 1,
     });
-    expect((await publicMenu(ctx)).soldOutItemIds).toEqual([itemId]);
+    expect((await liveService(ctx)).soldOutItemIds).toEqual([itemId]);
     expect((await serviceState(ctx)).soldOutItemIds).toEqual([itemId]);
 
     await ctx.owner.client.mutation(api.service.setSoldOut, {
@@ -113,7 +102,7 @@ describe("sold-out dishes", () => {
       itemId,
       soldOut: false,
     });
-    expect((await publicMenu(ctx)).soldOutItemIds).toEqual([]);
+    expect((await liveService(ctx)).soldOutItemIds).toEqual([]);
   });
 
   it("refuses dishes and venues of another owner", async () => {
@@ -220,7 +209,7 @@ describe("daily special", () => {
       imageUrl: null,
       endsAt: NOW + 10 * HOUR,
     };
-    expect((await publicMenu(ctx)).special).toEqual(expected);
+    expect((await liveService(ctx)).special).toEqual(expected);
     expect((await serviceState(ctx)).special).toEqual({
       ...expected,
       imageStorageId: null,
@@ -277,66 +266,84 @@ describe("daily special", () => {
     expect(await specials(ctx.t)).toEqual([]);
   });
 
-  it("replaces the previous special, its image and its expiry", async () => {
+  it("edits the current special in place", async () => {
     const ctx = await setup();
-    const firstId = await special(ctx, { name: "Pot-au-feu" });
-    const firstImage = await attachImage(ctx.t, firstId);
+    const firstImage = await storeImage(ctx.t);
+    const specialId = await special(ctx, {
+      name: "Pot-au-feu",
+      imageStorageId: firstImage,
+    });
     const firstJob = (await specials(ctx.t))[0]!.expiryJobId!;
 
     // Editing the text keeps the current photo.
-    const secondId = await special(ctx, {
-      name: "Pot-au-feu maison",
-      imageStorageId: firstImage,
-    });
+    expect(
+      await special(ctx, {
+        name: "Pot-au-feu maison",
+        imageStorageId: firstImage,
+      }),
+    ).toBe(specialId);
     expect(await jobState(ctx.t, firstJob)).toBe("canceled");
     expect(await fileExists(ctx.t, firstImage)).toBe(true);
     const state = await serviceState(ctx);
     expect(state.special).toMatchObject({
-      id: secondId,
+      id: specialId,
       name: "Pot-au-feu maison",
       imageStorageId: firstImage,
     });
     expect(state.special?.imageUrl).toEqual(expect.any(String));
 
-    // A new special without photo removes the old one.
-    const thirdId = await special(ctx, {
-      name: "Choucroute",
+    // A new photo replaces the old one.
+    const secondImage = await storeImage(ctx.t);
+    await special(ctx, { name: "Choucroute", imageStorageId: secondImage });
+    expect(await fileExists(ctx.t, firstImage)).toBe(false);
+
+    // Removing the photo deletes it; the description is cleared too.
+    await special(ctx, { name: "Choucroute", endsAt: NOW + 2 * HOUR });
+    expect(await fileExists(ctx.t, secondImage)).toBe(false);
+    expect(await specials(ctx.t)).toMatchObject([
+      { _id: specialId, name: "Choucroute", endsAt: NOW + 2 * HOUR },
+    ]);
+    expect((await specials(ctx.t))[0]).not.toHaveProperty("imageStorageId");
+    expect((await liveService(ctx)).special).toMatchObject({
+      id: specialId,
+      imageUrl: null,
       endsAt: NOW + 2 * HOUR,
     });
-    expect(await fileExists(ctx.t, firstImage)).toBe(false);
-    expect(await specials(ctx.t)).toMatchObject([
-      { _id: thirdId, name: "Choucroute" },
-    ]);
-    expect((await publicMenu(ctx)).special).toMatchObject({
-      id: thirdId,
-      imageUrl: null,
-    });
 
-    // Only the current special's job is still pending.
+    // Only the latest expiry job is still pending.
+    const jobs = await ctx.t.run((db) =>
+      db.db.system.query("_scheduled_functions").take(10),
+    );
+    expect(jobs.filter((job) => job.state.kind === "pending")).toHaveLength(1);
     vi.advanceTimersByTime(HOUR);
     await ctx.t.finishInProgressScheduledFunctions();
     expect(await specials(ctx.t)).toHaveLength(1);
+    await ctx.t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await specials(ctx.t)).toEqual([]);
   });
 
   it("expires at its end through the scheduler", async () => {
     const ctx = await setup();
-    const specialId = await special(ctx, { endsAt: NOW + 3 * HOUR });
-    const image = await attachImage(ctx.t, specialId);
+    const image = await storeImage(ctx.t);
+    const specialId = await special(ctx, {
+      endsAt: NOW + 3 * HOUR,
+      imageStorageId: image,
+    });
 
     vi.advanceTimersByTime(3 * HOUR - 1);
     await ctx.t.finishInProgressScheduledFunctions();
-    expect((await publicMenu(ctx)).special).toMatchObject({ id: specialId });
+    expect((await liveService(ctx)).special).toMatchObject({ id: specialId });
 
     await ctx.t.finishAllScheduledFunctions(vi.runAllTimers);
-    expect((await publicMenu(ctx)).special).toBeNull();
+    expect((await liveService(ctx)).special).toBeNull();
     expect(await specials(ctx.t)).toEqual([]);
     expect(await fileExists(ctx.t, image)).toBe(false);
   });
 
   it("expires idempotently", async () => {
     const ctx = await setup();
-    const specialId = await special(ctx);
-    const image = await attachImage(ctx.t, specialId);
+    const image = await storeImage(ctx.t);
+    const specialId = await special(ctx, { imageStorageId: image });
     await ctx.t.mutation(internal.service.expireSpecial, { specialId });
     await ctx.t.mutation(internal.service.expireSpecial, { specialId });
     expect(await specials(ctx.t)).toEqual([]);
@@ -345,8 +352,8 @@ describe("daily special", () => {
 
   it("can be cleared by its owner only", async () => {
     const ctx = await setup();
-    const specialId = await special(ctx);
-    const image = await attachImage(ctx.t, specialId);
+    const image = await storeImage(ctx.t);
+    const specialId = await special(ctx, { imageStorageId: image });
     const jobId = (await specials(ctx.t))[0]!.expiryJobId!;
     await expect(
       ctx.stranger.client.mutation(api.service.clearDailySpecial, {
@@ -360,9 +367,28 @@ describe("daily special", () => {
     expect(await specials(ctx.t)).toEqual([]);
     expect(await fileExists(ctx.t, image)).toBe(false);
     expect(await jobState(ctx.t, jobId)).toBe("canceled");
-    expect((await publicMenu(ctx)).special).toBeNull();
+    expect((await liveService(ctx)).special).toBeNull();
     await ctx.owner.client.mutation(api.service.clearDailySpecial, {
       venueId: ctx.venueId,
     });
+  });
+});
+
+describe("live service", () => {
+  it("is empty for unknown or unpublished venues", async () => {
+    const ctx = await setup();
+    await ctx.owner.client.mutation(api.service.setSoldOut, {
+      itemId: ctx.itemIds[0]!,
+      soldOut: true,
+    });
+    await special(ctx);
+    expect((await liveService(ctx)).soldOutItemIds).toHaveLength(1);
+
+    const empty = { soldOutItemIds: [], special: null };
+    expect(
+      await ctx.t.query(api.menus.getLiveService, { venueId: "not-an-id" }),
+    ).toEqual(empty);
+    await ctx.t.run((db) => db.db.patch(ctx.venueId, { status: "draft" }));
+    expect(await liveService(ctx)).toEqual(empty);
   });
 });

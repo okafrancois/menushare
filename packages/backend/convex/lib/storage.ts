@@ -32,6 +32,15 @@ export function uploadProblem(
   return null;
 }
 
+export async function deleteFileIfPresent(
+  ctx: MutationCtx,
+  storageId: Id<"_storage">,
+) {
+  if (await ctx.db.system.get("_storage", storageId)) {
+    await ctx.storage.delete(storageId);
+  }
+}
+
 /**
  * Throws INVALID_IMAGE unless `storageId` is a recent upload (and, when
  * required, an image of at most 2 MB). Rejected fresh uploads are deleted;
@@ -49,9 +58,29 @@ export async function assertFreshUpload(
   throw new Error("INVALID_IMAGE");
 }
 
+const STORAGE_ID_KEY = /StorageId$/;
 // Storage identifiers would let anyone claim (then delete) a file, and the
 // owner's account id has no business on a public menu.
 const PRIVATE_KEY = /StorageId$|^ownerId$/;
+
+/** Every storage identifier (`…StorageId` field) found in a published menu. */
+export function storageIdsIn(
+  value: unknown,
+  found: Set<string> = new Set(),
+): Set<string> {
+  if (Array.isArray(value)) {
+    for (const entry of value) storageIdsIn(entry, found);
+  } else if (value !== null && typeof value === "object") {
+    for (const [key, entry] of Object.entries(value)) {
+      if (STORAGE_ID_KEY.test(key) && typeof entry === "string") {
+        found.add(entry);
+      } else {
+        storageIdsIn(entry, found);
+      }
+    }
+  }
+  return found;
+}
 
 /**
  * Deep copy of a published menu without private fields (`…StorageId`,

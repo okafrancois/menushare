@@ -648,3 +648,89 @@ test("QR codes par table et statistiques en mode démo", async ({ page }) => {
     "true",
   );
 });
+
+test("carte : réorganiser un plat au glisser-déposer", async ({ page }) => {
+  await page.goto("/dashboard/menu");
+  await page.getByRole("button", { name: "Réorganiser" }).click();
+  const antipasti = page.locator(".pro-category").first();
+  const rows = antipasti.locator("[data-row-id]");
+  await expect(rows).toHaveCount(4);
+
+  const grip = antipasti.locator('[data-row-id="burrata"] .pro-grip');
+  const target = await antipasti.locator('[data-row-id="vitello"]').boundingBox();
+  const start = await grip.boundingBox();
+  await page.mouse.move(start!.x + start!.width / 2, start!.y + start!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    start!.x + start!.width / 2,
+    target!.y + target!.height * 0.8,
+    { steps: 12 },
+  );
+  await page.mouse.up();
+
+  expect(
+    await rows.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-row-id")),
+    ),
+  ).toEqual(["caprese", "vitello", "burrata", "arancini"]);
+  await expect(publishBar(page)).toContainText("1 modification");
+});
+
+test("les feuilles gardent le focus et le rendent à la fermeture", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/menu/nonna-lydie");
+  const opener = page.getByRole("button", { name: "Infos pratiques" });
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Nonna Lydie" });
+  await expect(dialog.getByRole("button", { name: "Fermer" })).toBeFocused();
+  for (let index = 0; index < 12; index++) {
+    await page.keyboard.press("Tab");
+    expect(
+      await dialog.evaluate((element) => element.contains(document.activeElement)),
+    ).toBe(true);
+  }
+  await page.keyboard.press("Shift+Tab");
+  expect(
+    await dialog.evaluate((element) => element.contains(document.activeElement)),
+  ).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+
+test("un plat épuisé après l’ajout sort du total et de la vue serveur", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/menu/nonna-lydie?t=4");
+  const category = page.locator(".pm-category");
+  await category
+    .getByRole("button", { name: "Ajouter Burrata Pugliese à ma sélection" })
+    .click();
+  await category
+    .getByRole("button", { name: "Ajouter Tiramisù della Casa à ma sélection" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Ouvrir ma sélection : 2 articles, 23/ }),
+  ).toBeVisible();
+
+  await page.goto("/dashboard");
+  await page
+    .getByRole("switch", { name: "Disponibilité de Burrata Pugliese" })
+    .click();
+
+  await page.goto("/menu/nonna-lydie");
+  const pill = page.getByRole("button", { name: /Ouvrir ma sélection : 1 article, 9/ });
+  await pill.click();
+  const selection = page.getByRole("dialog", { name: "Ma sélection" });
+  await expect(selection).toContainText("Épuisé entre-temps · non compté");
+  await expect(selection).toContainText(/Total estimé9\s€/);
+  await selection.getByRole("button", { name: "Montrer au serveur" }).click();
+  const waiter = page.getByRole("dialog", { name: "Sélection pour le serveur" });
+  await expect(waiter).toContainText("Table 4");
+  await expect(waiter).toContainText("1×Tiramisù della Casa");
+  await expect(waiter).not.toContainText("Burrata");
+  await expect(waiter).toContainText("1 plat épuisé retiré de la liste.");
+});

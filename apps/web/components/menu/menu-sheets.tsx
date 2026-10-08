@@ -34,6 +34,7 @@ export type SelectionLine = {
   name: string;
   priceCents: number;
   quantity: number;
+  soldOut: boolean;
 };
 
 export function SelectionSheet({
@@ -66,14 +67,17 @@ export function SelectionSheet({
             </p>
             <ul className="pm-selection">
               {lines.map((line) => (
-                <li key={line.id}>
+                <li key={line.id} className={line.soldOut ? "sold-out" : ""}>
                   <div>
                     <strong>{line.name}</strong>
                     <span>
-                      {formatPrice(line.priceCents)}
-                      {line.quantity > 1
-                        ? ` · ${formatPrice(line.priceCents * line.quantity)}`
-                        : ""}
+                      {line.soldOut
+                        ? "Épuisé entre-temps · non compté"
+                        : `${formatPrice(line.priceCents)}${
+                            line.quantity > 1
+                              ? ` · ${formatPrice(line.priceCents * line.quantity)}`
+                              : ""
+                          }`}
                     </span>
                   </div>
                   <div className="pm-stepper small">
@@ -130,10 +134,12 @@ export function SelectionSheet({
 export function WaiterView({
   table,
   lines,
+  soldOutCount,
   onClose,
 }: {
   table?: number;
   lines: SelectionLine[];
+  soldOutCount: number;
   onClose: () => void;
 }) {
   return (
@@ -151,6 +157,13 @@ export function WaiterView({
             </li>
           ))}
         </ul>
+        {soldOutCount ? (
+          <p>
+            {soldOutCount} plat{soldOutCount > 1 ? "s" : ""} épuisé
+            {soldOutCount > 1 ? "s" : ""} retiré{soldOutCount > 1 ? "s" : ""} de
+            la liste.
+          </p>
+        ) : null}
         <p>Écran agrandi pour le serveur. Rien n’a encore été commandé.</p>
       </div>
     </Sheet>

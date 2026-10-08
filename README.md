@@ -103,6 +103,6 @@ bun run test:e2e      # démarre Next.js sur le port 3100 (E2E_PORT pour changer
 bun run build
 ```
 
-La suite comprend 68 tests unitaires côté web, 74 tests Convex (convex-test) et
-12 scénarios E2E Chromium sur les pages publiques et privées, dont plusieurs
+La suite comprend 68 tests unitaires côté web, 81 tests Convex (convex-test) et
+15 scénarios E2E Chromium sur les pages publiques et privées, dont plusieurs
 parcours mobiles à 390 × 844.

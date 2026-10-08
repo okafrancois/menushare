@@ -479,6 +479,8 @@ export const popularItems = query({
           .gte("day", shiftDay(args.today, 1 - POPULAR_DAYS))
           .lte("day", args.today),
       )
+      // Most recent days first, so a truncated read drops the oldest ones.
+      .order("desc")
       .take(POPULAR_ROW_LIMIT);
     const ranked = [...groupByKey(rows)]
       .map(([itemId, counters]) => ({ itemId, opens: counters.itemOpens }))

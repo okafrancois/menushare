@@ -98,8 +98,8 @@ function commonOrder(ids: string[], others: Set<string>) {
 
 /**
  * Human-readable list of what publishing would change on the live menu.
- * Live service data (sold-out dishes, suggestion of the day) is not part of
- * the published content and never appears here.
+ * Live service data (sold-out dishes, suggestion of the day) and the menu
+ * address (changed immediately, the old one redirects) never appear here.
  */
 export function diffMenu(
   published: MenuContent | undefined,
@@ -120,12 +120,6 @@ export function diffMenu(
   const before = published.venue;
   const after = draft.venue;
 
-  if (before.slug !== after.slug)
-    changes.push({
-      id: "venue-slug",
-      title: "Adresse du menu",
-      detail: `/menu/${before.slug} → /menu/${after.slug}`,
-    });
   const info = listFields(before, after, INFO_FIELDS);
   if (info.length)
     changes.push({

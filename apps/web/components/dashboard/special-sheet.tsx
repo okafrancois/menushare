@@ -11,7 +11,12 @@ import {
   type DailySpecial,
 } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
-import { closingTimeToday, nextOccurrence } from "@/lib/opening-hours";
+import { statsDay } from "@/lib/menu-analytics";
+import {
+  closingTimeToday,
+  formatTime,
+  nextOccurrence,
+} from "@/lib/opening-hours";
 
 const clock = new Intl.DateTimeFormat("fr-FR", {
   hour: "2-digit",
@@ -44,6 +49,9 @@ export function SpecialSheet({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const preview = image === undefined ? special?.imageUrl : image;
+  const endLabel = /^\d{2}:\d{2}$/.test(endTime)
+    ? `${statsDay(nextOccurrence(endTime, Date.now())) === statsDay(Date.now()) ? "Aujourd’hui" : "Demain"} à ${formatTime(endTime)}`
+    : "";
 
   async function save() {
     setError("");
@@ -142,7 +150,10 @@ export function SpecialSheet({
             />
           </label>
           <label className="pro-field inline">
-            <span>Retirer de la carte à</span>
+            <span>
+              Retirer de la carte à
+              {endLabel ? <small>{endLabel}</small> : null}
+            </span>
             <input
               type="time"
               value={endTime}

@@ -21,6 +21,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -135,6 +136,12 @@ export default function MenuPage() {
     }
   }
 
+  // While dragging, rows are re-ordered live: React moves the dragged row in
+  // the DOM, which can drop pointer capture, so movement is followed on
+  // window rather than on the handle.
+  const dragRef = useRef<Drag | null>(null);
+  const dragging = drag !== null;
+
   function startDrag(
     event: ReactPointerEvent<HTMLElement>,
     category: MenuCategory,
@@ -143,9 +150,8 @@ export default function MenuPage() {
     const list = event.currentTarget.closest("[data-reorder-list]");
     if (!list) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
     const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-row-id]"));
-    setDrag({
+    const next: Drag = {
       categoryId: category.id,
       draggingId: itemId,
       original: rows.map((row) => row.dataset.rowId!),
@@ -155,33 +161,46 @@ export default function MenuPage() {
         return rect.top + rect.height / 2;
       }),
       startY: event.clientY,
-    });
+    };
+    dragRef.current = next;
+    setDrag(next);
   }
 
-  function moveDrag(event: ReactPointerEvent<HTMLElement>) {
-    if (!drag) return;
-    const from = drag.original.indexOf(drag.draggingId);
-    const position = drag.mids[from]! + (event.clientY - drag.startY);
-    const others = drag.original.filter((id) => id !== drag.draggingId);
-    const target = drag.mids.filter(
-      (mid, index) => index !== from && mid < position,
-    ).length;
-    const ids = [...others];
-    ids.splice(target, 0, drag.draggingId);
-    if (ids.join() !== drag.ids.join()) setDrag({ ...drag, ids });
-  }
-
-  async function endDrag() {
-    if (!drag) return;
-    const { categoryId, ids, original } = drag;
-    setDrag(null);
-    if (ids.join() === original.join()) return;
-    try {
-      await reorderItems(categoryId, ids);
-    } catch (cause) {
-      toast(errorMessage(cause));
-    }
-  }
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (event: PointerEvent) => {
+      const current = dragRef.current;
+      if (!current) return;
+      event.preventDefault();
+      const from = current.original.indexOf(current.draggingId);
+      const position = current.mids[from]! + (event.clientY - current.startY);
+      const ids = current.original.filter((id) => id !== current.draggingId);
+      const target = current.mids.filter(
+        (mid, index) => index !== from && mid < position,
+      ).length;
+      ids.splice(target, 0, current.draggingId);
+      if (ids.join() === current.ids.join()) return;
+      dragRef.current = { ...current, ids };
+      setDrag(dragRef.current);
+    };
+    const end = () => {
+      const current = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (!current || current.ids.join() === current.original.join()) return;
+      Promise.resolve(reorderItems(current.categoryId, current.ids)).catch(
+        (cause: unknown) => toast(errorMessage(cause)),
+      );
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [dragging, reorderItems, toast]);
 
   return (
     <>
@@ -331,9 +350,6 @@ export default function MenuPage() {
                             className="pro-grip"
                             aria-hidden="true"
                             onPointerDown={(event) => startDrag(event, category, item.id)}
-                            onPointerMove={moveDrag}
-                            onPointerUp={endDrag}
-                            onPointerCancel={endDrag}
                           >
                             <GripVertical size={18} />
                           </span>

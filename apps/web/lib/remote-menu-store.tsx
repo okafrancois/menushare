@@ -77,20 +77,77 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const addCategoryMutation = useMutation(api.menus.addCategory);
   const updateCategoryMutation = useMutation(api.menus.updateCategory);
   const deleteCategoryMutation = useMutation(api.menus.deleteCategory);
-  const reorderCategoriesMutation = useMutation(api.menus.reorderCategories);
+  const reorderCategoriesBase = useMutation(api.menus.reorderCategories);
   const addItemMutation = useMutation(api.menus.addItem);
   const updateItemMutation = useMutation(api.menus.updateItem);
   const deleteItemMutation = useMutation(api.menus.deleteItem);
-  const reorderItemsMutation = useMutation(api.menus.reorderItems);
+  const reorderItemsBase = useMutation(api.menus.reorderItems);
   const setExternalVideo = useMutation(api.menus.setExternalVideo);
   const removeExternalVideo = useMutation(api.menus.removeExternalVideo);
   const addItemImageMutation = useMutation(api.menus.addItemImage);
   const removeMedia = useMutation(api.menus.removeMedia);
   const publishMutation = useMutation(api.menus.publish);
-  const setSoldOutMutation = useMutation(api.service.setSoldOut);
+  const setSoldOutBase = useMutation(api.service.setSoldOut);
   const setAutoRestockMutation = useMutation(api.service.setAutoRestock);
   const setDailySpecialMutation = useMutation(api.service.setDailySpecial);
   const clearDailySpecialMutation = useMutation(api.service.clearDailySpecial);
+
+  // Optimistic updates: a reordered list or a sold-out toggle must not jump
+  // back while the mutation travels to the server.
+  const reorderCategoriesMutation = useMemo(
+    () =>
+      reorderCategoriesBase.withOptimisticUpdate(
+        (localStore, { menuId: id, categoryIds }) => {
+          const current = localStore.getQuery(api.menus.getDraft, { menuId: id });
+          if (!current) return;
+          const byId = new Map(current.categories.map((c) => [c._id, c]));
+          if (categoryIds.some((categoryId) => !byId.has(categoryId))) return;
+          localStore.setQuery(
+            api.menus.getDraft,
+            { menuId: id },
+            { ...current, categories: categoryIds.map((categoryId) => byId.get(categoryId)!) },
+          );
+        },
+      ),
+    [reorderCategoriesBase],
+  );
+  const reorderItemsMutation = useMemo(
+    () =>
+      reorderItemsBase.withOptimisticUpdate((localStore, { categoryId, itemIds }) => {
+        if (!menuId) return;
+        const current = localStore.getQuery(api.menus.getDraft, { menuId });
+        if (!current) return;
+        localStore.setQuery(
+          api.menus.getDraft,
+          { menuId },
+          {
+            ...current,
+            categories: current.categories.map((category) => {
+              if (category._id !== categoryId) return category;
+              const byId = new Map(category.items.map((item) => [item._id, item]));
+              if (itemIds.some((itemId) => !byId.has(itemId))) return category;
+              return { ...category, items: itemIds.map((itemId) => byId.get(itemId)!) };
+            }),
+          },
+        );
+      }),
+    [menuId, reorderItemsBase],
+  );
+  const setSoldOutMutation = useMemo(
+    () =>
+      setSoldOutBase.withOptimisticUpdate((localStore, { itemId, soldOut }) => {
+        if (!venueId) return;
+        const current = localStore.getQuery(api.service.getServiceState, { venueId });
+        if (!current) return;
+        const others = current.soldOutItemIds.filter((id) => id !== itemId);
+        localStore.setQuery(
+          api.service.getServiceState,
+          { venueId },
+          { ...current, soldOutItemIds: soldOut ? [...others, itemId] : others },
+        );
+      }),
+    [setSoldOutBase, venueId],
+  );
 
   const live = useMemo<LiveService>(() => {
     if (!service) return emptyLiveService();

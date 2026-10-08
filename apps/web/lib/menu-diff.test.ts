@@ -75,7 +75,7 @@ describe("diffMenu", () => {
     expect(changes[0]!.detail).toBe("Ordre des plats");
   });
 
-  it("regroupe les informations et l’apparence de l’établissement", () => {
+  it("regroupe infos et apparence, sans l’adresse déjà effective", () => {
     const state = createDemoState();
     const draft = clone(content(state));
     draft.venue.name = "Nonna";
@@ -83,11 +83,6 @@ describe("diffMenu", () => {
     draft.venue.accentColor = "#000000";
     draft.venue.slug = "nonna";
     expect(diffMenu(state.published, draft)).toEqual([
-      {
-        id: "venue-slug",
-        title: "Adresse du menu",
-        detail: "/menu/nonna-lydie → /menu/nonna",
-      },
       {
         id: "venue-info",
         title: "Informations de l’établissement",

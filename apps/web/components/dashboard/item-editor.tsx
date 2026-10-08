@@ -3,7 +3,7 @@
 import { ALLERGENS, DISH_TAGS } from "@repo/backend/menu";
 import { normalizeExternalVideoUrl } from "@repo/backend/video";
 import { Camera, ImagePlus, ShieldCheck, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   errorMessage,
@@ -82,15 +82,53 @@ export function ItemEditor({
   const [reviewQuote, setReviewQuote] = useState(item?.reviewQuote ?? "");
   const [reviewAuthor, setReviewAuthor] = useState(item?.reviewAuthor ?? "");
   const [pendingImages, setPendingImages] = useState<MenuImage[]>([]);
+  // Removing a photo is part of the edit: applied on save, undone by Cancel.
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
+  // Set once a new dish exists, so a retry after a failed upload updates it
+  // instead of creating a duplicate.
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const savedId = item?.id ?? createdId;
+  const savedCategoryId = item ? initialCategoryId : categoryId;
 
-  const currentItem = item
+  const currentItem = savedId
     ? state.categories
-        .find((category) => category.id === initialCategoryId)
-        ?.items.find((candidate) => candidate.id === item.id)
+        .find((category) => category.id === savedCategoryId)
+        ?.items.find((candidate) => candidate.id === savedId)
     : undefined;
-  const images = currentItem?.images ?? item?.images ?? [];
+  const images = (currentItem?.images ?? item?.images ?? []).filter(
+    (image) => !removedImageIds.includes(image.id),
+  );
+
+  const formState = JSON.stringify({
+    name,
+    price,
+    categoryId,
+    description,
+    details,
+    videoUrl,
+    available,
+    allergens,
+    tags,
+    ingredients,
+    pairingName,
+    pairingPrice,
+    reviewRating,
+    reviewCount,
+    reviewQuote,
+    reviewAuthor,
+    pending: pendingImages.map((image) => image.id),
+    removed: removedImageIds,
+  });
+  const initialState = useRef(formState);
+  const dirty = formState !== initialState.current;
+
+  function requestClose() {
+    if (dirty && !confirm("Abandonner les modifications non enregistrées ?"))
+      return;
+    onClose();
+  }
   const hasDetails = Boolean(
     item?.details ||
       item?.ingredients.length ||
@@ -140,8 +178,8 @@ export function ItemEditor({
         : undefined;
       setSaving(true);
       let itemId: string;
-      if (item) {
-        await updateItem(initialCategoryId, item.id, {
+      if (savedId) {
+        await updateItem(savedCategoryId, savedId, {
           name: name.trim(),
           priceCents,
           description: description.trim(),
@@ -160,7 +198,7 @@ export function ItemEditor({
           reviewQuote: reviewQuote.trim(),
           reviewAuthor: reviewAuthor.trim(),
         });
-        itemId = item.id;
+        itemId = savedId;
       } else {
         itemId = await addItem(
           categoryId,
@@ -182,9 +220,17 @@ export function ItemEditor({
             reviewAuthor,
           }),
         );
+        setCreatedId(itemId);
+      }
+      for (const imageId of removedImageIds) {
+        await removeItemImage(savedCategoryId, itemId, imageId);
+        setRemovedImageIds((current) => current.filter((id) => id !== imageId));
       }
       for (const image of pendingImages) {
-        await addItemImage(item ? initialCategoryId : categoryId, itemId, image);
+        await addItemImage(savedCategoryId, itemId, image);
+        setPendingImages((current) =>
+          current.filter((candidate) => candidate.id !== image.id),
+        );
       }
       toast(`${name.trim()} enregistré · à publier`);
       onClose();
@@ -216,16 +262,16 @@ export function ItemEditor({
 
   return (
     <ProSheet
-      onClose={onClose}
+      onClose={requestClose}
       labelledBy="item-editor-title"
       variant="full"
       className="pro-editor"
     >
       <header className="pro-navbar">
-        <button className="pro-nav-btn" type="button" onClick={onClose}>
+        <button className="pro-nav-btn" type="button" onClick={requestClose}>
           Annuler
         </button>
-        <h2 id="item-editor-title">{item ? "Modifier le plat" : "Nouveau plat"}</h2>
+        <h2 id="item-editor-title">{savedId ? "Modifier le plat" : "Nouveau plat"}</h2>
         <button
           className="pro-nav-btn save"
           type="button"
@@ -247,7 +293,7 @@ export function ItemEditor({
                   type="button"
                   aria-label={`Supprimer ${image.alt}`}
                   onClick={() =>
-                    item && removeItemImage(initialCategoryId, item.id, image.id)
+                    setRemovedImageIds((current) => [...current, image.id])
                   }
                 >
                   <Trash2 size={15} />
@@ -331,7 +377,7 @@ export function ItemEditor({
               onChange={(event) => setPrice(event.target.value)}
             />
           </label>
-          {item ? null : (
+          {savedId ? null : (
             <label className="pro-field">
               <span>Catégorie</span>
               <select

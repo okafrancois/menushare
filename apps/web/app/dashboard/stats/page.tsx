@@ -169,11 +169,13 @@ function StatsReport({ stats }: { stats: Stats }) {
           current={totals.scans}
           previous={previous.scans}
         />
+        {/* No trend: a returning visitor only counts in the latest period,
+            so the previous period is structurally underestimated. */}
         <Kpi
           label="Visiteurs uniques"
           value={numberFormat.format(totals.uniqueVisitors)}
-          current={totals.uniqueVisitors}
-          previous={previous.uniqueVisitors}
+          current={null}
+          previous={null}
         />
         <Kpi
           label="Temps moyen"

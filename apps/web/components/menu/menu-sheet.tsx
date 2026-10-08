@@ -1,12 +1,13 @@
 "use client";
 
 import { X } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useRef } from "react";
+
+import { useModal } from "@/lib/use-modal";
 
 /**
  * Modal panel of the public menu: a bottom sheet on phones, centred in the
- * menu column on larger screens. Closes on Escape and on the backdrop, locks
- * the page scroll and gives focus back to the opener.
+ * menu column on larger screens. Modal behaviour comes from `useModal`.
  */
 export function Sheet({
   onClose,
@@ -24,29 +25,7 @@ export function Sheet({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLElement>(null);
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
-
-  useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const focusable =
-      panel.current?.querySelector<HTMLElement>("[data-autofocus]") ??
-      panel.current?.querySelector<HTMLElement>("input, button, a[href]");
-    (focusable ?? panel.current)?.focus({ preventScroll: true });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onCloseRef.current();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-      opener?.focus?.({ preventScroll: true });
-    };
-  }, []);
+  useModal(panel, onClose);
 
   return (
     <div

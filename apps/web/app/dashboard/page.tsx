@@ -298,7 +298,7 @@ function AvailabilityCard({ moment }: { moment: string }) {
         </span>
         <span className="pro-row-copy">
           <strong>Remettre en stock chaque nuit</strong>
-          <small>Les plats épuisés redeviennent disponibles vers 4 h</small>
+          <small>Les plats épuisés redeviennent disponibles en fin de nuit</small>
         </span>
         <Switch
           checked={state.live.autoRestock}

@@ -79,3 +79,27 @@ export async function createPublishedVenue(
   await owner.client.mutation(api.menus.publish, { menuId });
   return { venueId, menuId, slug, categoryId, itemIds };
 }
+
+/**
+ * Stores a file as a browser upload would. convex-test records no content
+ * type, so metadata is written on the `_storage` document (tests only).
+ */
+export async function storeFile(
+  t: TestConvex,
+  metadata: { contentType?: string; size?: number } = {},
+) {
+  const storageId = await t.run((ctx) =>
+    ctx.storage.store(new Blob(["fake image"])),
+  );
+  if (Object.keys(metadata).length > 0) {
+    await t.run((ctx) => ctx.db.patch(storageId as never, metadata as never));
+  }
+  return storageId;
+}
+
+export function storeImage(t: TestConvex, size?: number) {
+  return storeFile(t, {
+    contentType: "image/png",
+    ...(size === undefined ? {} : { size }),
+  });
+}

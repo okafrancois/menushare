@@ -1,6 +1,7 @@
 import type { WithoutSystemFields } from "convex/server";
 import { v } from "convex/values";
 
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedMenuOrThrow } from "./lib/auth";
@@ -11,9 +12,14 @@ import {
   soldOutItemIds,
   specialView,
 } from "./lib/service";
-import { assertFreshUpload, withoutPrivateFields } from "./lib/storage";
+import {
+  assertFreshUpload,
+  deleteFileIfPresent,
+  storageIdsIn,
+  withoutPrivateFields,
+} from "./lib/storage";
 import { normalizeExternalVideoUrl } from "./lib/video";
-import { mutation, query } from "./server";
+import { internalMutation, mutation, query } from "./server";
 
 async function mediaWithUrl(ctx: QueryCtx | MutationCtx, media: Doc<"media">) {
   return {
@@ -31,6 +37,78 @@ function cents(value: number) {
 async function touchMenu(ctx: MutationCtx, menuId: Id<"menus">) {
   await ctx.db.patch(menuId, { status: "draft", updatedAt: Date.now() });
 }
+
+/**
+ * Deletes a file removed from the draft. The published menu may still show
+ * it, so it then waits for the next publication (see purgePendingFileBatch).
+ */
+async function releaseFile(
+  ctx: MutationCtx,
+  menu: Doc<"menus">,
+  storageId: Id<"_storage">,
+) {
+  if (menu.publishedSnapshotId) {
+    await ctx.db.insert("pendingFileDeletions", {
+      venueId: menu.venueId,
+      storageId,
+    });
+  } else {
+    await deleteFileIfPresent(ctx, storageId);
+  }
+}
+
+const FILE_PURGE_BATCH = 500;
+
+/**
+ * Deletes files queued up to `before` (the publication time), except those
+ * the published menu still references, then continues in a new transaction
+ * if the batch was full.
+ */
+async function purgePendingFileBatch(
+  ctx: MutationCtx,
+  venueId: Id<"venues">,
+  published: Set<string>,
+  before: number,
+) {
+  const rows = await ctx.db
+    .query("pendingFileDeletions")
+    .withIndex("by_venue", (q) =>
+      q.eq("venueId", venueId).lte("_creationTime", before),
+    )
+    .take(FILE_PURGE_BATCH);
+  for (const row of rows) {
+    if (!published.has(row.storageId)) {
+      await deleteFileIfPresent(ctx, row.storageId);
+    }
+    await ctx.db.delete("pendingFileDeletions", row._id);
+  }
+  if (rows.length === FILE_PURGE_BATCH) {
+    await ctx.scheduler.runAfter(0, internal.menus.purgePendingFiles, {
+      venueId,
+      before,
+    });
+  }
+}
+
+export const purgePendingFiles = internalMutation({
+  args: { venueId: v.id("venues"), before: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { venueId, before }) => {
+    const menus = await ctx.db
+      .query("menus")
+      .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+      .take(10);
+    const published = new Set<string>();
+    for (const menu of menus) {
+      const snapshot = menu.publishedSnapshotId
+        ? await ctx.db.get("menuSnapshots", menu.publishedSnapshotId)
+        : null;
+      if (snapshot) storageIdsIn(snapshot.data, published);
+    }
+    await purgePendingFileBatch(ctx, venueId, published, before);
+    return null;
+  },
+});
 
 async function menuIdForItem(ctx: MutationCtx, itemId: Id<"menuItems">) {
   const item = await ctx.db.get(itemId);
@@ -168,7 +246,7 @@ export const deleteCategory = mutation({
   handler: async (ctx, { categoryId }) => {
     const category = await ctx.db.get(categoryId);
     if (!category) return;
-    await ownedMenuOrThrow(ctx, category.menuId);
+    const { menu } = await ownedMenuOrThrow(ctx, category.menuId);
     const items = await ctx.db
       .query("menuItems")
       .withIndex("by_category_order", (q) => q.eq("categoryId", categoryId))
@@ -179,8 +257,9 @@ export const deleteCategory = mutation({
         .withIndex("by_item_order", (q) => q.eq("itemId", item._id))
         .take(20);
       for (const asset of media) {
-        if (asset.imageStorageId)
-          await ctx.storage.delete(asset.imageStorageId);
+        if (asset.imageStorageId) {
+          await releaseFile(ctx, menu, asset.imageStorageId);
+        }
         await ctx.db.delete(asset._id);
       }
       await clearSoldOut(ctx, item._id);
@@ -347,13 +426,15 @@ export const deleteItem = mutation({
     if (!item) return;
     const category = await ctx.db.get(item.categoryId);
     if (!category) throw new Error("NOT_FOUND");
-    await ownedMenuOrThrow(ctx, category.menuId);
+    const { menu } = await ownedMenuOrThrow(ctx, category.menuId);
     const media = await ctx.db
       .query("media")
       .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
       .take(20);
     for (const asset of media) {
-      if (asset.imageStorageId) await ctx.storage.delete(asset.imageStorageId);
+      if (asset.imageStorageId) {
+        await releaseFile(ctx, menu, asset.imageStorageId);
+      }
       await ctx.db.delete(asset._id);
     }
     await clearSoldOut(ctx, itemId);
@@ -466,8 +547,10 @@ export const removeMedia = mutation({
     if (!item) throw new Error("NOT_FOUND");
     const category = await ctx.db.get(item.categoryId);
     if (!category) throw new Error("NOT_FOUND");
-    await ownedMenuOrThrow(ctx, category.menuId);
-    if (media.imageStorageId) await ctx.storage.delete(media.imageStorageId);
+    const { menu } = await ownedMenuOrThrow(ctx, category.menuId);
+    if (media.imageStorageId) {
+      await releaseFile(ctx, menu, media.imageStorageId);
+    }
     await ctx.db.delete(mediaId);
     await touchMenu(ctx, category.menuId);
   },
@@ -548,6 +631,15 @@ export const publish = mutation({
       publishedSnapshotId: snapshotId,
     });
     await ctx.db.patch(venue._id, { status: "published" });
+    // Files removed since the previous publication are no longer shown.
+    // Files queued after this snapshot are left to the next publication.
+    const snapshot = await ctx.db.get("menuSnapshots", snapshotId);
+    await purgePendingFileBatch(
+      ctx,
+      venue._id,
+      storageIdsIn(data),
+      snapshot!._creationTime,
+    );
     return { snapshotId, version, publishedAt };
   },
 });
@@ -584,15 +676,44 @@ export const getPublishedBySlug = query({
     if (!menu?.publishedSnapshotId) return null;
     const snapshot = await ctx.db.get(menu.publishedSnapshotId);
     if (!snapshot) return null;
-    // Sold-out dishes and the daily special are live service state: they are
-    // read on every request instead of being frozen in the snapshot. Expired
-    // specials are removed by a scheduled job, so no clock is read here.
-    const special = await currentSpecial(ctx, venue._id);
+    // Storage identifiers and the owner id stay private. Live service state
+    // is served by getLiveService so that it does not resend the whole menu.
+    return { ...withoutPrivateFields(snapshot.data), redirectedFrom };
+  },
+});
+
+const NO_LIVE_SERVICE = { soldOutItemIds: [], special: null };
+
+/**
+ * Public: sold-out dishes and daily special of a published venue, read live
+ * (outside the snapshot). Expired specials are removed by a scheduled job, so
+ * no clock is read here.
+ */
+export const getLiveService = query({
+  args: { venueId: v.string() },
+  returns: v.object({
+    soldOutItemIds: v.array(v.string()),
+    special: v.union(
+      v.null(),
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        description: v.optional(v.string()),
+        priceCents: v.number(),
+        imageUrl: v.union(v.string(), v.null()),
+        endsAt: v.number(),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const venueId = ctx.db.normalizeId("venues", args.venueId);
+    const venue = venueId ? await ctx.db.get("venues", venueId) : null;
+    if (!venueId || !venue || venue.status !== "published") {
+      return NO_LIVE_SERVICE;
+    }
+    const special = await currentSpecial(ctx, venueId);
     return {
-      // Storage identifiers and the owner id stay private.
-      ...withoutPrivateFields(snapshot.data),
-      redirectedFrom,
-      soldOutItemIds: await soldOutItemIds(ctx, venue._id),
+      soldOutItemIds: await soldOutItemIds(ctx, venueId),
       special: special ? await specialView(ctx, special) : null,
     };
   },

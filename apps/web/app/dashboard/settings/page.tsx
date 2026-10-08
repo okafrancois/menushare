@@ -41,20 +41,26 @@ export default function SettingsPage() {
     if (slugError) return setError(slugError);
     if (hoursError) return setError(hoursError);
     setSaving(true);
+    const slug = slugify(form.slug);
+    const slugChanged = slug !== state.venue.slug;
     try {
       await updateVenue({
         name: form.name.trim(),
         kind: form.kind.trim(),
         city: form.city.trim(),
         phone: form.phone.trim(),
-        slug: slugify(form.slug),
+        slug,
         tagline: form.tagline.trim(),
         description: form.description.trim(),
         address: form.address.trim(),
         hours: form.hours.trim(),
         openingHours: form.openingHours ?? [],
       });
-      setStatus("Modifications enregistrées · visibles après publication.");
+      setStatus(
+        slugChanged
+          ? `Modifications enregistrées. La nouvelle adresse /menu/${slug} est active tout de suite, l’ancienne redirige ; le reste sera visible après publication.`
+          : "Modifications enregistrées · visibles après publication.",
+      );
       toast("Informations enregistrées · à publier");
     } catch (cause) {
       setError(errorMessage(cause));

@@ -154,6 +154,13 @@ export function closingTimeToday(
   now: number,
 ): string | null {
   const { day, minutes } = parisTime(now);
+  // After midnight, yesterday's late service may still be running.
+  const yesterday = hours?.find((candidate) => candidate.day === (day + 6) % 7);
+  for (const range of yesterday?.ranges ?? []) {
+    const start = toMinutes(range.open);
+    const end = toMinutes(range.close);
+    if (end <= start && minutes < end) return range.close;
+  }
   const entry = hours?.find((candidate) => candidate.day === day);
   const ranges = entry?.ranges ?? [];
   const upcoming = ranges.filter((range) => {

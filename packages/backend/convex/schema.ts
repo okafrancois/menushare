@@ -162,6 +162,13 @@ export default defineSchema({
     expiryJobId: v.optional(v.id("_scheduled_functions")),
   }).index("by_venue", ["venueId"]),
 
+  // Files removed from the draft while the published menu may still show
+  // them; deleted at the next publication.
+  pendingFileDeletions: defineTable({
+    venueId: v.id("venues"),
+    storageId: v.id("_storage"),
+  }).index("by_venue", ["venueId"]),
+
   // Daily counters, one row per venue/day and per dimension (dish, cover
   // video, table). Every KPI shown to owners is summed from these rows.
   analyticsDaily: defineTable({
