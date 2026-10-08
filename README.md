@@ -67,6 +67,13 @@ Vercel utilise `apps/web` comme répertoire racine. Les secrets OAuth et Resend
 restent exclusivement dans les variables d'environnement Convex ; Vercel ne
 reçoit que les URLs publiques et les indicateurs d'activation des boutons.
 
+Les boutons Google et Apple sont affichés uniquement si
+`NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED` et `NEXT_PUBLIC_APPLE_OAUTH_ENABLED` valent
+respectivement `true`. Une valeur `false` ou une variable absente masque le
+bouton concerné. Ces variables sont intégrées au JavaScript lors du build :
+après les avoir modifiées dans Vercel pour l'environnement ciblé, lancer un
+nouveau déploiement pour appliquer les valeurs.
+
 ### Connexion Google
 
 Callback OAuth (développement ou production : utiliser l'URL `.convex.site` du

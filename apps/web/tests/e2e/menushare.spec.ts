@@ -102,10 +102,16 @@ test("accueil, connexion sans mot de passe et redirection inscription", async ({
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(
     page.getByRole("button", { name: "Continuer avec Google" }),
-  ).toBeVisible();
+  ).toHaveCount(process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" ? 1 : 0);
   await expect(
     page.getByRole("button", { name: "Continuer avec Apple" }),
-  ).toBeVisible();
+  ).toHaveCount(process.env.NEXT_PUBLIC_APPLE_OAUTH_ENABLED === "true" ? 1 : 0);
+  await expect(page.getByText("ou par email", { exact: true })).toHaveCount(
+    process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" ||
+      process.env.NEXT_PUBLIC_APPLE_OAUTH_ENABLED === "true"
+      ? 1
+      : 0,
+  );
   await expect(
     page.getByRole("button", { name: "Recevoir mon code" }),
   ).toBeVisible();
@@ -117,8 +123,6 @@ test("accueil, connexion sans mot de passe et redirection inscription", async ({
     "font-weight",
     "700",
   );
-  await page.getByRole("button", { name: "Continuer avec Google" }).click();
-  await expect(page.locator(".form-error")).toContainText("identifiants OAuth");
   await page.goto("/sign-up");
   await expect(page).toHaveURL(/\/sign-in$/);
 });

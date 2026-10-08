@@ -126,38 +126,46 @@ export function SignInCard() {
 
       {step === "email" ? (
         <>
-          <div className="auth-methods">
-            <button
-              className="social-button"
-              type="button"
-              onClick={() => startSocial("google")}
-              disabled={pending !== null}
-            >
-              <span className="social-icon">G</span>
-              <span>Continuer avec Google</span>
-              {pending === "google" ? (
-                <LoaderCircle className="animate-spin" size={17} />
-              ) : (
-                <ArrowRight size={17} />
-              )}
-            </button>
-            <button
-              className="social-button"
-              type="button"
-              onClick={() => startSocial("apple")}
-              disabled={pending !== null}
-            >
-              <span className="social-icon">●</span>
-              <span>Continuer avec Apple</span>
-              {pending === "apple" ? (
-                <LoaderCircle className="animate-spin" size={17} />
-              ) : (
-                <ArrowRight size={17} />
-              )}
-            </button>
-          </div>
+          {(socialEnabled.google || socialEnabled.apple) && (
+            <>
+              <div className="auth-methods">
+                {socialEnabled.google && (
+                  <button
+                    className="social-button"
+                    type="button"
+                    onClick={() => startSocial("google")}
+                    disabled={pending !== null}
+                  >
+                    <span className="social-icon">G</span>
+                    <span>Continuer avec Google</span>
+                    {pending === "google" ? (
+                      <LoaderCircle className="animate-spin" size={17} />
+                    ) : (
+                      <ArrowRight size={17} />
+                    )}
+                  </button>
+                )}
+                {socialEnabled.apple && (
+                  <button
+                    className="social-button"
+                    type="button"
+                    onClick={() => startSocial("apple")}
+                    disabled={pending !== null}
+                  >
+                    <span className="social-icon">●</span>
+                    <span>Continuer avec Apple</span>
+                    {pending === "apple" ? (
+                      <LoaderCircle className="animate-spin" size={17} />
+                    ) : (
+                      <ArrowRight size={17} />
+                    )}
+                  </button>
+                )}
+              </div>
 
-          <div className="divider">ou par email</div>
+              <div className="divider">ou par email</div>
+            </>
+          )}
 
           <form onSubmit={requestCode}>
             <div className="form-group">
