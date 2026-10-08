@@ -17,8 +17,13 @@ export function usePublication() {
     [state.categories, state.published, state.venue],
   );
   const hasContent = state.categories.some((category) => category.items.length);
-  const online = Boolean(state.published);
-  const pending = online ? changes.length > 0 : hasContent;
+  const online =
+    Boolean(state.published) &&
+    state.venue.status !== "draft" &&
+    state.venue.status !== "archived";
+  const pending =
+    state.venue.status !== "archived" &&
+    (online ? changes.length > 0 : hasContent);
   const changedItemIds = useMemo(
     () =>
       new Set(

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { PageHead } from "@/components/dashboard/ui";
 import { slugify, validateSlug } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
 
 export function VenueForm({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
@@ -18,6 +19,7 @@ export function VenueForm({ compact = false }: { compact?: boolean }) {
   const [pending, setPending] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const error = validateSlug(slug);
+  useUnsavedChanges(Boolean(name || city || slugTouched) && !pending);
   const publicHost = (
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app"
   )
@@ -121,6 +123,7 @@ export function VenueForm({ compact = false }: { compact?: boolean }) {
             {slug && error ? <span className="form-error">{error}</span> : null}
           </div>
         </div>
+        <p className="muted">France · Français · Euro · Heure de Paris</p>
         {submitError ? (
           <p className="form-error" role="alert">
             {submitError}

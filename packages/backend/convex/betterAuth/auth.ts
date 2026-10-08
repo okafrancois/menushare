@@ -4,7 +4,7 @@ import { betterAuth } from "better-auth/minimal";
 import { emailOTP } from "better-auth/plugins";
 import type { DataModelFromSchemaDefinition } from "convex/server";
 
-import { components } from "../_generated/api";
+import { components, internal } from "../_generated/api";
 import authConfig from "../auth.config";
 import schema from "../schema";
 
@@ -80,7 +80,18 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
     ].filter((value): value is string => Boolean(value)),
     emailAndPassword: { enabled: false },
     socialProviders: socialProviders(),
-    user: { deleteUser: { enabled: true } },
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          if (!("runMutation" in ctx))
+            throw new Error("Deletion requires a mutation context");
+          await ctx.runMutation(internal.venues.removeAccountData, {
+            ownerId: user.id,
+          });
+        },
+      },
+    },
     plugins: [
       convex({ authConfig, jwksRotateOnTokenGenerationError: true }),
       crossDomain({ siteUrl }),

@@ -169,7 +169,10 @@ export function useToast() {
 }
 
 /** Human message for an error thrown by a store action. */
-export function errorMessage(cause: unknown, fallback = "Action impossible, réessayez.") {
+export function errorMessage(
+  cause: unknown,
+  fallback = "Action impossible, réessayez.",
+) {
   const code = cause instanceof Error ? cause.message : "";
   const messages: Record<string, string> = {
     INVALID_PRICE: "Le prix est invalide.",
@@ -180,9 +183,20 @@ export function errorMessage(cause: unknown, fallback = "Action impossible, rée
     IMAGE_UPLOAD_FAILED: "L’envoi de l’image a échoué.",
     SLUG_UNAVAILABLE: "Cette adresse de menu est déjà utilisée.",
     INVALID_SPECIAL: "Indiquez un nom de 80 caractères maximum.",
-    INVALID_SPECIAL_END: "L’heure de fin doit être dans les 36 prochaines heures.",
+    INVALID_SPECIAL_END:
+      "L’heure de fin doit être dans les 36 prochaines heures.",
     INVALID_OPENING_HOURS: "Vérifiez les horaires : une plage est invalide.",
     INVALID_COLOR: "Couleur invalide.",
+    CATEGORY_LIMIT_REACHED:
+      "La carte est limitée à 100 catégories. Réutilisez une catégorie existante.",
+    ITEM_LIMIT_REACHED:
+      "Cette catégorie contient déjà 200 plats. Choisissez une autre catégorie.",
+    VERSION_NOT_FOUND: "Cette version n’est plus disponible.",
+    INVALID_IMPORT:
+      "Le fichier contient des valeurs invalides. Vérifiez les noms et les prix avant de réessayer.",
+    CONFIRM_NAME:
+      "Recopiez exactement le nom de l’établissement pour confirmer.",
+    INVALID_NAME: "Indiquez un nom.",
   };
   if (messages[code]) return messages[code];
   // Convex wraps server errors: "[CONVEX …] Uncaught Error: CODE".

@@ -23,6 +23,7 @@ import {
   type MenuItem,
 } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
 
 const MAX_IMAGES = 8;
 const SHORT_MAX = 140;
@@ -49,6 +50,8 @@ export function ItemEditor({
     deleteItem,
     addItemImage,
     removeItemImage,
+    duplicateItem,
+    moveItem,
   } = useMenuStore();
   const toast = useToast();
   const [categoryId, setCategoryId] = useState(initialCategoryId);
@@ -123,6 +126,7 @@ export function ItemEditor({
   });
   const initialState = useRef(formState);
   const dirty = formState !== initialState.current;
+  useUnsavedChanges(dirty && !saving);
 
   function requestClose() {
     if (dirty && !confirm("Abandonner les modifications non enregistrées ?"))
@@ -131,10 +135,10 @@ export function ItemEditor({
   }
   const hasDetails = Boolean(
     item?.details ||
-      item?.ingredients.length ||
-      item?.pairingName ||
-      item?.reviewQuote ||
-      item?.reviewRating !== undefined,
+    item?.ingredients.length ||
+    item?.pairingName ||
+    item?.reviewQuote ||
+    item?.reviewRating !== undefined,
   );
 
   async function addFiles(files: File[]) {
@@ -164,7 +168,10 @@ export function ItemEditor({
         ? Number(reviewRating.replace(",", "."))
         : undefined;
       const count = reviewCount.trim() ? Number(reviewCount) : undefined;
-      if (rating !== undefined && (!Number.isFinite(rating) || rating < 0 || rating > 5))
+      if (
+        rating !== undefined &&
+        (!Number.isFinite(rating) || rating < 0 || rating > 5)
+      )
         throw new Error("La note doit être comprise entre 0 et 5.");
       if (count !== undefined && (!Number.isInteger(count) || count < 0))
         throw new Error("Le nombre d’avis est invalide.");
@@ -232,6 +239,8 @@ export function ItemEditor({
           current.filter((candidate) => candidate.id !== image.id),
         );
       }
+      if (categoryId !== savedCategoryId)
+        await moveItem(itemId, savedCategoryId, categoryId);
       toast(`${name.trim()} enregistré · à publier`);
       onClose();
     } catch (cause) {
@@ -271,7 +280,9 @@ export function ItemEditor({
         <button className="pro-nav-btn" type="button" onClick={requestClose}>
           Annuler
         </button>
-        <h2 id="item-editor-title">{savedId ? "Modifier le plat" : "Nouveau plat"}</h2>
+        <h2 id="item-editor-title">
+          {savedId ? "Modifier le plat" : "Nouveau plat"}
+        </h2>
         <button
           className="pro-nav-btn save"
           type="button"
@@ -288,7 +299,9 @@ export function ItemEditor({
             {images.map((image, index) => (
               <div className="pro-photo" key={image.id}>
                 <img src={image.dataUrl} alt={image.alt} />
-                {index === 0 ? <span className="pro-photo-tag">Vignette</span> : null}
+                {index === 0 ? (
+                  <span className="pro-photo-tag">Vignette</span>
+                ) : null}
                 <button
                   type="button"
                   aria-label={`Supprimer ${image.alt}`}
@@ -354,7 +367,8 @@ export function ItemEditor({
             ) : null}
           </div>
           <p className="pro-hint">
-            La première photo sert de vignette. Jusqu’à {MAX_IMAGES} images de 2 Mo.
+            La première photo sert de vignette. Jusqu’à {MAX_IMAGES} photos. Les
+            grandes photos sont adaptées automatiquement.
           </p>
         </section>
 
@@ -377,10 +391,11 @@ export function ItemEditor({
               onChange={(event) => setPrice(event.target.value)}
             />
           </label>
-          {savedId ? null : (
+          {
             <label className="pro-field">
               <span>Catégorie</span>
               <select
+                aria-label="Catégorie"
                 value={categoryId}
                 onChange={(event) => setCategoryId(event.target.value)}
               >
@@ -391,7 +406,7 @@ export function ItemEditor({
                 ))}
               </select>
             </label>
-          )}
+          }
           <label className="pro-field">
             <span>
               Description courte
@@ -411,7 +426,9 @@ export function ItemEditor({
             <div className="pro-field inline">
               <span>
                 Visible sur la carte
-                <small>Pour une rupture du soir, utilisez plutôt la disponibilité.</small>
+                <small>
+                  Pour une rupture du soir, utilisez plutôt la disponibilité.
+                </small>
               </span>
               <Switch
                 checked={available}
@@ -424,13 +441,15 @@ export function ItemEditor({
 
         <h3 className="pro-section-title">
           <ShieldCheck size={17} /> Allergènes
-          <span className={`pro-tag ${allergens === undefined ? "warn" : "good"}`}>
+          <span
+            className={`pro-tag ${allergens === undefined ? "warn" : "good"}`}
+          >
             {allergenState}
           </span>
         </h3>
         <p className="pro-hint">
-          Information obligatoire. Elle s’affiche sur la fiche du plat et sert au
-          filtre « Allergies » de vos clients.
+          Information obligatoire. Elle s’affiche sur la fiche du plat et sert
+          au filtre « Allergies » de vos clients.
         </p>
         <div className="pro-chips" role="group" aria-label="Allergènes du plat">
           {ALLERGENS.map((allergen) => (
@@ -439,7 +458,9 @@ export function ItemEditor({
               type="button"
               className="pro-chip"
               aria-pressed={allergens?.includes(allergen.key) ?? false}
-              onClick={() => setAllergens(toggle(allergens ?? [], allergen.key))}
+              onClick={() =>
+                setAllergens(toggle(allergens ?? [], allergen.key))
+              }
             >
               {allergen.label}
             </button>
@@ -455,7 +476,11 @@ export function ItemEditor({
         </div>
 
         <h3 className="pro-section-title">Régime et mise en avant</h3>
-        <div className="pro-chips diet" role="group" aria-label="Régime et badges">
+        <div
+          className="pro-chips diet"
+          role="group"
+          aria-label="Régime et badges"
+        >
           {DISH_TAGS.map((tag) => (
             <button
               key={tag.key}
@@ -561,7 +586,39 @@ export function ItemEditor({
         ) : null}
 
         {item ? (
-          <button className="pro-btn danger block" type="button" onClick={remove}>
+          <button
+            className="pro-btn line block"
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              if (
+                dirty &&
+                !confirm(
+                  "Dupliquer la dernière version enregistrée de ce plat ? Vos modifications en cours ne seront pas copiées.",
+                )
+              )
+                return;
+              setSaving(true);
+              try {
+                await duplicateItem(initialCategoryId, item);
+                toast("Plat dupliqué dans le brouillon");
+                onClose();
+              } catch (error) {
+                setError(errorMessage(error));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            Dupliquer ce plat
+          </button>
+        ) : null}
+        {item ? (
+          <button
+            className="pro-btn danger block"
+            type="button"
+            onClick={remove}
+          >
             <Trash2 size={16} /> Supprimer ce plat
           </button>
         ) : null}

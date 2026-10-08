@@ -26,6 +26,8 @@ import {
 } from "@/components/dashboard/ui";
 import { useMenuStore } from "@/lib/menu-store";
 import { usePublication } from "@/lib/use-publication";
+import { confirmNavigation } from "@/lib/use-unsaved-changes";
+import { ConnectionNotice } from "@/components/connection-notice";
 
 const VENUE_PATHS = [
   "/dashboard/venue",
@@ -33,6 +35,7 @@ const VENUE_PATHS = [
   "/dashboard/appearance",
   "/dashboard/settings",
   "/dashboard/establishments",
+  "/dashboard/account",
 ];
 
 const NAV = [
@@ -46,7 +49,10 @@ const NAV = [
     href: "/dashboard/menu",
     label: "Carte",
     icon: BookOpen,
-    match: (path: string) => path.startsWith("/dashboard/menu"),
+    match: (path: string) =>
+      ["/dashboard/menu", "/dashboard/history", "/dashboard/tools"].some(
+        (prefix) => path.startsWith(prefix),
+      ),
   },
   {
     href: "/dashboard/stats",
@@ -58,7 +64,8 @@ const NAV = [
     href: "/dashboard/venue",
     label: "Établissement",
     icon: Store,
-    match: (path: string) => VENUE_PATHS.some((prefix) => path.startsWith(prefix)),
+    match: (path: string) =>
+      VENUE_PATHS.some((prefix) => path.startsWith(prefix)),
   },
 ] as const;
 
@@ -98,8 +105,12 @@ export function VenueAvatar({
 }
 
 export function DashboardShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   return (
-    <ProtectedWorkspace mode="dashboard">
+    <ProtectedWorkspace
+      mode="dashboard"
+      allowEmpty={pathname === "/dashboard/account"}
+    >
       <ToastProvider>
         <ShellLayout>{children}</ShellLayout>
       </ToastProvider>
@@ -109,14 +120,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
 function ShellLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { state } = useMenuStore();
+  const { state, remote, persistenceError } = useMenuStore();
   const [venueSheet, setVenueSheet] = useState(false);
   const { online, pending, changes, version } = usePublication();
-  const status = !online
-    ? "Pas encore en ligne"
-    : pending
-      ? `En ligne · v${version} · ${changes.length} en attente`
-      : `En ligne · v${version}`;
+  const status =
+    state.venue.status === "archived"
+      ? "Établissement archivé"
+      : !online
+        ? "Carte hors ligne"
+        : pending
+          ? `En ligne · v${version} · ${changes.length} en attente`
+          : `En ligne · v${version}`;
   const venueButton = (
     <button
       className="pro-venue-btn"
@@ -158,12 +172,8 @@ function ShellLayout({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
-        <Link
-          className="pro-side-preview"
-          href={`/menu/${state.venue.slug}`}
-          target="_blank"
-        >
-          <Eye size={16} /> Voir la carte en ligne
+        <Link className="pro-side-preview" href="/preview" target="_blank">
+          <Eye size={16} /> Prévisualiser le brouillon
         </Link>
       </aside>
 
@@ -171,15 +181,29 @@ function ShellLayout({ children }: { children: ReactNode }) {
         {venueButton}
         <Link
           className="pro-icon-btn"
-          href={`/menu/${state.venue.slug}`}
+          href="/preview"
           target="_blank"
-          aria-label="Voir la carte en ligne"
+          aria-label="Prévisualiser le brouillon"
         >
           <Eye size={19} />
         </Link>
       </header>
 
-      <main className="pro-main">{children}</main>
+      <main className="pro-main">
+        <ConnectionNotice />
+        {persistenceError ? (
+          <p className="pro-banner warn" role="alert">
+            {persistenceError}
+          </p>
+        ) : null}
+        {!remote ? (
+          <p className="pro-banner">
+            Mode démo · Vos essais sont enregistrés uniquement dans ce
+            navigateur.
+          </p>
+        ) : null}
+        <div key={state.venue.id}>{children}</div>
+      </main>
 
       <PublishBar />
 
@@ -227,7 +251,7 @@ function PublishBar() {
   if (!pending) return null;
   const title = online
     ? `${changes.length} modification${changes.length > 1 ? "s" : ""} en attente`
-    : "Votre carte n’est pas encore en ligne";
+    : "Votre carte est hors ligne";
   return (
     <>
       <div className="pro-publish-bar" role="region" aria-label="Publication">
@@ -314,7 +338,11 @@ function VenueSheet({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   return (
     <ProSheet onClose={onClose} labelledBy="venues-title">
-      <SheetHead id="venues-title" title="Mes établissements" onClose={onClose} />
+      <SheetHead
+        id="venues-title"
+        title="Mes établissements"
+        onClose={onClose}
+      />
       <div className="pro-sheet-body">
         <ul className="pro-venue-list">
           {venues.map((venue) => {
@@ -325,6 +353,7 @@ function VenueSheet({ onClose }: { onClose: () => void }) {
                   type="button"
                   aria-current={selected ? "true" : undefined}
                   onClick={() => {
+                    if (!selected && !confirmNavigation()) return;
                     selectVenue(venue.id);
                     onClose();
                     if (!selected) toast(`${venue.name} sélectionné`);
@@ -348,7 +377,11 @@ function VenueSheet({ onClose }: { onClose: () => void }) {
           })}
         </ul>
         {canLoadMoreVenues ? (
-          <button className="pro-btn ghost block" type="button" onClick={loadMoreVenues}>
+          <button
+            className="pro-btn ghost block"
+            type="button"
+            onClick={loadMoreVenues}
+          >
             Afficher plus d’établissements
           </button>
         ) : null}

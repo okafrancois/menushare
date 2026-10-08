@@ -16,7 +16,8 @@ export async function ownedVenueOrThrow(
 ) {
   const user = await currentUserOrThrow(ctx);
   const venue = await ctx.db.get(venueId);
-  if (!venue || venue.ownerId !== user._id) throw new Error("Forbidden");
+  if (!venue || venue.deleting || venue.ownerId !== user._id)
+    throw new Error("Forbidden");
   return { user, venue };
 }
 

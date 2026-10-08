@@ -282,7 +282,13 @@ async function periodRows(
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 function assertDay(day: string) {
-  if (!DAY.test(day)) throw new Error("INVALID_DAY");
+  const date = new Date(`${day}T00:00:00Z`);
+  if (
+    !DAY.test(day) ||
+    !Number.isFinite(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== day
+  )
+    throw new Error("INVALID_DAY");
 }
 
 function periodTotals(counters: AnalyticsCounters) {
@@ -325,7 +331,7 @@ export const getStats = query({
   handler: async (ctx, { venueId, today, days }) => {
     const { venue } = await ownedVenueOrThrow(ctx, venueId);
     assertDay(today);
-    if (!(ANALYTICS_PERIODS as readonly number[]).includes(days)) {
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
       throw new Error("INVALID_PERIOD");
     }
     const calendar = periodDays(today, days);

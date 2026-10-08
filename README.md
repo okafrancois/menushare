@@ -110,6 +110,37 @@ bun run test:e2e      # démarre Next.js sur le port 3100 (E2E_PORT pour changer
 bun run build
 ```
 
-La suite comprend 68 tests unitaires côté web, 81 tests Convex (convex-test) et
-15 scénarios E2E Chromium sur les pages publiques et privées, dont plusieurs
+La suite comprend 73 tests unitaires côté web, 88 tests Convex (convex-test) et
+21 scénarios E2E Chromium sur les pages publiques et privées, dont plusieurs
 parcours mobiles à 390 × 844.
+
+## Périmètre du prototype
+
+Un propriétaire par établissement, sans invitations, rôles ni paiement.
+Les cartes sont en français, les prix en euros et les horaires à l’heure de Paris.
+
+- Le tableau de bord accompagne la première publication. `/preview` présente
+  le brouillon complet au propriétaire ; les clients voient la dernière publication.
+- La carte propose duplication et déplacement des plats, import CSV avec aperçu
+  (500 lignes au maximum), export CSV/JSON et restauration des dix dernières
+  publications. Les photos de ces versions sont conservées pour la restauration.
+- Un établissement peut être mis hors ligne, archivé, réactivé ou supprimé.
+  Les anciennes adresses restent valables après plusieurs changements de slug.
+- `/dashboard/account` propose profil, connexions actives, export et suppression
+  du compte. La suppression retire les cartes du public et purge les données par lots.
+- `/help`, `/terms` et `/privacy` expliquent les parcours du prototype. Le contact
+  d’aide peut être renseigné via `NEXT_PUBLIC_SUPPORT_EMAIL`.
+- Les statistiques et lecteurs externes sont facultatifs. Les préférences sont
+  désactivées par défaut ; chaque vidéo peut aussi être autorisée individuellement.
+- Les grandes photos JPEG, PNG et WebP sont adaptées avant l’envoi (25 Mo maximum
+  en entrée, 1 600 pixels et 2 Mo maximum après conversion).
+
+Sans URL Convex, le développement utilise la démo locale. En production, cette
+démo exige `NEXT_PUBLIC_DEMO_MODE=true` ; sinon une page d’indisponibilité apparaît.
+Les modifications de la démo restent dans le navigateur. Un export préserve les
+essais lorsque son stockage est plein ou effacé.
+
+Les tests E2E utilisent cette démo. Les mutations serveur sont vérifiées avec
+`convex-test`. Les parcours de connexion réelle et de gestion des sessions exigent
+un environnement Convex/Better Auth configuré. Déployer ensemble le schéma et les
+fonctions Convex avec le frontend pour activer les nouvelles fonctionnalités.

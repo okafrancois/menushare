@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
+
 import {
   AlertTriangle,
   ArrowDown,
@@ -35,10 +38,18 @@ import {
   Switch,
   useToast,
 } from "@/components/dashboard/ui";
-import { formatPrice, type MenuCategory, type MenuItem } from "@/lib/menu-domain";
+import {
+  formatPrice,
+  type MenuCategory,
+  type MenuItem,
+} from "@/lib/menu-domain";
 import { normalizeSearch } from "@/lib/menu-filters";
 import { useMenuStore } from "@/lib/menu-store";
-import { completionCounts, isIncomplete, missingPhoto } from "@/lib/menu-quality";
+import {
+  completionCounts,
+  isIncomplete,
+  missingPhoto,
+} from "@/lib/menu-quality";
 import { usePublication } from "@/lib/use-publication";
 
 type Editing = { categoryId: string; item?: MenuItem } | null;
@@ -52,12 +63,7 @@ type Drag = {
 };
 
 export default function MenuPage() {
-  const {
-    state,
-    setSoldOut,
-    reorderCategories,
-    reorderItems,
-  } = useMenuStore();
+  const { state, setSoldOut, reorderCategories, reorderItems } = useMenuStore();
   const { changedItemIds } = usePublication();
   const toast = useToast();
   const [query, setQuery] = useState("");
@@ -73,7 +79,10 @@ export default function MenuPage() {
   const [drag, setDrag] = useState<Drag | null>(null);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("filtre") === "a-completer")
+    if (
+      new URLSearchParams(window.location.search).get("filtre") ===
+      "a-completer"
+    )
       setIncompleteOnly(true);
   }, []);
 
@@ -86,18 +95,31 @@ export default function MenuPage() {
   const needle = normalizeSearch(query);
 
   const blocks = state.categories
-    .filter((category) => reordering || categoryFilter === "all" || category.id === categoryFilter)
+    .filter(
+      (category) =>
+        reordering ||
+        categoryFilter === "all" ||
+        category.id === categoryFilter,
+    )
     .map((category) => {
       let items = category.items;
       if (drag?.categoryId === category.id)
-        items = drag.ids.map((id) => category.items.find((item) => item.id === id)!);
+        items = drag.ids.map((id) =>
+          category.items.find((item) => item.id === id)!,
+        );
       if (!reordering) {
-        if (needle) items = items.filter((item) => normalizeSearch(item.name).includes(needle));
-        if (incompleteOnly) items = items.filter((item) => isIncomplete(item, category));
+        if (needle)
+          items = items.filter((item) =>
+            normalizeSearch(item.name).includes(needle),
+          );
+        if (incompleteOnly)
+          items = items.filter((item) => isIncomplete(item, category));
       }
       return { category, items };
     })
-    .filter(({ items }) => reordering || items.length || (!needle && !incompleteOnly));
+    .filter(
+      ({ items }) => reordering || items.length || (!needle && !incompleteOnly),
+    );
 
   async function toggleAvailability(item: MenuItem, available: boolean) {
     try {
@@ -112,7 +134,11 @@ export default function MenuPage() {
     }
   }
 
-  async function moveItem(category: MenuCategory, index: number, delta: number) {
+  async function moveItem(
+    category: MenuCategory,
+    index: number,
+    delta: number,
+  ) {
     const ids = category.items.map((item) => item.id);
     const target = index + delta;
     if (target < 0 || target >= ids.length) return;
@@ -150,7 +176,9 @@ export default function MenuPage() {
     const list = event.currentTarget.closest("[data-reorder-list]");
     if (!list) return;
     event.preventDefault();
-    const rows = Array.from(list.querySelectorAll<HTMLElement>("[data-row-id]"));
+    const rows = Array.from(
+      list.querySelectorAll<HTMLElement>("[data-row-id]"),
+    );
     const next: Drag = {
       categoryId: category.id,
       draggingId: itemId,
@@ -215,11 +243,20 @@ export default function MenuPage() {
               aria-pressed={reordering}
               onClick={() => setReordering(!reordering)}
             >
-              <GripVertical size={16} /> {reordering ? "Terminer" : "Réorganiser"}
+              <GripVertical size={16} />{" "}
+              {reordering ? "Terminer" : "Réorganiser"}
             </button>
           ) : null
         }
       />
+
+      <div className="pro-utility-links">
+        <Link href="/preview" target="_blank">
+          Prévisualiser le brouillon
+        </Link>
+        <Link href="/dashboard/history">Historique</Link>
+        <Link href="/dashboard/tools">Importer et exporter</Link>
+      </div>
 
       {state.categories.length ? (
         <>
@@ -239,7 +276,11 @@ export default function MenuPage() {
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
-              <div className="pro-chip-bar" role="group" aria-label="Filtrer la carte">
+              <div
+                className="pro-chip-bar"
+                role="group"
+                aria-label="Filtrer la carte"
+              >
                 <button
                   type="button"
                   className="pro-chip"
@@ -269,7 +310,8 @@ export default function MenuPage() {
                     aria-pressed={incompleteOnly}
                     onClick={() => setIncompleteOnly(!incompleteOnly)}
                   >
-                    <AlertTriangle size={14} /> À compléter <small>{incompleteCount}</small>
+                    <AlertTriangle size={14} /> À compléter{" "}
+                    <small>{incompleteCount}</small>
                   </button>
                 ) : null}
               </div>
@@ -302,7 +344,8 @@ export default function MenuPage() {
                   <div>
                     <h2 id={`cat-${category.id}`}>{category.name}</h2>
                     <small>
-                      {category.items.length} plat{category.items.length > 1 ? "s" : ""}
+                      {category.items.length} plat
+                      {category.items.length > 1 ? "s" : ""}
                       {category.eyebrow ? ` · ${category.eyebrow}` : ""}
                     </small>
                   </div>
@@ -330,7 +373,9 @@ export default function MenuPage() {
                       className="pro-icon-btn plain"
                       type="button"
                       aria-label={`Options de ${category.name}`}
-                      onClick={() => setCategorySheet({ mode: "edit", category })}
+                      onClick={() =>
+                        setCategorySheet({ mode: "edit", category })
+                      }
                     >
                       <MoreHorizontal size={20} />
                     </button>
@@ -349,7 +394,9 @@ export default function MenuPage() {
                           <span
                             className="pro-grip"
                             aria-hidden="true"
-                            onPointerDown={(event) => startDrag(event, category, item.id)}
+                            onPointerDown={(event) =>
+                              startDrag(event, category, item.id)
+                            }
                           >
                             <GripVertical size={18} />
                           </span>
@@ -359,13 +406,17 @@ export default function MenuPage() {
                           type="button"
                           aria-label={`Modifier ${item.name}`}
                           disabled={reordering}
-                          onClick={() => setEditing({ categoryId: category.id, item })}
+                          onClick={() =>
+                            setEditing({ categoryId: category.id, item })
+                          }
                         >
                           <span
                             className={`pro-thumb ${item.images[0] ? "" : "empty"}`}
                             style={
                               item.images[0]
-                                ? { backgroundImage: `url(${item.images[0].dataUrl})` }
+                                ? {
+                                    backgroundImage: `url(${item.images[0].dataUrl})`,
+                                  }
                                 : undefined
                             }
                           >
@@ -444,7 +495,9 @@ export default function MenuPage() {
             );
           })}
           {!blocks.length ? (
-            <p className="pro-card pro-muted center">Aucun plat ne correspond.</p>
+            <p className="pro-card pro-muted center">
+              Aucun plat ne correspond.
+            </p>
           ) : null}
         </>
       ) : (
@@ -453,7 +506,9 @@ export default function MenuPage() {
             <UtensilsCrossed size={22} />
           </span>
           <h2>Votre carte est vide</h2>
-          <p>Commencez par une catégorie, par exemple « Entrées » ou « Vins ».</p>
+          <p>
+            Commencez par une catégorie, par exemple « Entrées » ou « Vins ».
+          </p>
           <button
             className="pro-btn primary"
             type="button"
@@ -465,14 +520,22 @@ export default function MenuPage() {
       )}
 
       {reordering ? null : (
-        <button className="pro-fab" type="button" onClick={() => setAddSheet(true)}>
+        <button
+          className="pro-fab"
+          type="button"
+          onClick={() => setAddSheet(true)}
+        >
           <Plus size={20} /> Ajouter
         </button>
       )}
 
       {addSheet ? (
         <ProSheet onClose={() => setAddSheet(false)} labelledBy="add-title">
-          <SheetHead id="add-title" title="Ajouter" onClose={() => setAddSheet(false)} />
+          <SheetHead
+            id="add-title"
+            title="Ajouter"
+            onClose={() => setAddSheet(false)}
+          />
           <div className="pro-sheet-body">
             <ul className="pro-actions">
               {state.categories.length ? (
@@ -535,7 +598,9 @@ export default function MenuPage() {
 
       {categorySheet ? (
         <CategorySheet
-          category={categorySheet.mode === "edit" ? categorySheet.category : undefined}
+          category={
+            categorySheet.mode === "edit" ? categorySheet.category : undefined
+          }
           onClose={() => setCategorySheet(null)}
         />
       ) : null}
@@ -570,11 +635,22 @@ function CategorySheet({
   const [eyebrow, setEyebrow] = useState(category?.eyebrow ?? "");
   const [error, setError] = useState("");
 
+  const dirty =
+    name !== (category?.name ?? "") || eyebrow !== (category?.eyebrow ?? "");
+  useUnsavedChanges(dirty);
+  function requestClose() {
+    if (!dirty || confirm("Abandonner les modifications non enregistrées ?"))
+      onClose();
+  }
+
   async function submit() {
     if (!name.trim()) return setError("Donnez un nom à la catégorie.");
     try {
       if (category) {
-        await updateCategory(category.id, { name: name.trim(), eyebrow: eyebrow.trim() });
+        await updateCategory(category.id, {
+          name: name.trim(),
+          eyebrow: eyebrow.trim(),
+        });
         toast("Catégorie modifiée · à publier");
       } else {
         await addCategory({ name, eyebrow });
@@ -587,11 +663,11 @@ function CategorySheet({
   }
 
   return (
-    <ProSheet onClose={onClose} labelledBy="category-title">
+    <ProSheet onClose={requestClose} labelledBy="category-title">
       <SheetHead
         id="category-title"
         title={category ? category.name : "Nouvelle catégorie"}
-        onClose={onClose}
+        onClose={requestClose}
       />
       <form
         className="pro-sheet-body"

@@ -537,7 +537,7 @@ describe("deleted files", () => {
     return { storageId, mediaId };
   }
 
-  it("keeps files shown by the published menu until the next publication", async () => {
+  it("keeps published photos until their last restorable version expires", async () => {
     const ctx = await setup();
     const removed = await addPhoto(ctx, ctx.itemIds[0]!);
     const ofDeletedItem = await addPhoto(ctx, ctx.itemIds[1]!);
@@ -560,6 +560,11 @@ describe("deleted files", () => {
     );
 
     await ctx.owner.client.mutation(api.menus.publish, { menuId: ctx.menuId });
+    expect(await fileExists(ctx.t, removed.storageId)).toBe(true);
+    for (let i = 0; i < 9; i++)
+      await ctx.owner.client.mutation(api.menus.publish, {
+        menuId: ctx.menuId,
+      });
     expect(await fileExists(ctx.t, removed.storageId)).toBe(false);
     expect(await fileExists(ctx.t, ofDeletedItem.storageId)).toBe(false);
     expect(await pending(ctx.t)).toEqual([]);
@@ -574,6 +579,11 @@ describe("deleted files", () => {
     });
     expect(await fileExists(ctx.t, photo.storageId)).toBe(true);
     await ctx.owner.client.mutation(api.menus.publish, { menuId: ctx.menuId });
+    expect(await fileExists(ctx.t, photo.storageId)).toBe(true);
+    for (let i = 0; i < 9; i++)
+      await ctx.owner.client.mutation(api.menus.publish, {
+        menuId: ctx.menuId,
+      });
     expect(await fileExists(ctx.t, photo.storageId)).toBe(false);
   });
 

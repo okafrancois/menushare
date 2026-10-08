@@ -58,6 +58,7 @@ type RawVenue = {
   coverVideoExternalId?: string;
   coverVideoEmbedUrl?: string;
   tableCount?: number;
+  status?: "draft" | "published" | "archived";
 };
 
 /** Shape stored in `menuSnapshots.data` and returned by the draft query. */
@@ -99,6 +100,7 @@ export function toVenue(raw: RawVenue): Venue {
           }
         : undefined,
     tableCount: raw.tableCount,
+    status: raw.status,
   };
 }
 
@@ -163,10 +165,10 @@ function isPayload(value: unknown): value is RawMenuPayload {
   const candidate = value as Partial<RawMenuPayload>;
   return Boolean(
     candidate.venue?._id &&
-      candidate.venue.slug &&
-      candidate.venue.name &&
-      candidate.menu &&
-      Array.isArray(candidate.categories),
+    candidate.venue.slug &&
+    candidate.venue.name &&
+    candidate.menu &&
+    Array.isArray(candidate.categories),
   );
 }
 

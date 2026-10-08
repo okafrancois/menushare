@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { VenueAvatar } from "@/components/dashboard/dashboard-shell";
+import { VenueLifecycle } from "@/components/dashboard/venue-lifecycle";
 import { errorMessage, PageHead, useToast } from "@/components/dashboard/ui";
 import { authClient } from "@/lib/auth-client";
 import { useMenuStore } from "@/lib/menu-store";
@@ -59,7 +60,8 @@ export default function VenueHubPage() {
   useEffect(() => setOrigin(window.location.origin), []);
   const { venue } = state;
   const url = `${origin}/menu/${venue.slug}`;
-  const hours = hoursSummary(venue.openingHours) || venue.hours || "À renseigner";
+  const hours =
+    hoursSummary(venue.openingHours) || venue.hours || "À renseigner";
 
   async function copy() {
     try {
@@ -159,6 +161,18 @@ export default function VenueHubPage() {
       <h2 className="pro-group-title">Compte</h2>
       <ul className="pro-card pro-hub">
         <HubRow
+          href="/dashboard/account"
+          icon={<Info size={19} />}
+          title="Mon compte"
+          detail="Profil, connexions et données"
+        />
+        <HubRow
+          href="/help"
+          icon={<Info size={19} />}
+          title="Aide et prise en main"
+          detail="Publication, QR codes, photos et questions fréquentes"
+        />
+        <HubRow
           href="/dashboard/establishments/new"
           icon={<Plus size={19} />}
           title="Ajouter un établissement"
@@ -193,7 +207,11 @@ export default function VenueHubPage() {
               className="pro-hub-row"
               type="button"
               onClick={() => {
-                if (confirm("Réinitialiser toutes les données locales de la démo ?")) {
+                if (
+                  confirm(
+                    "Réinitialiser toutes les données locales de la démo ?",
+                  )
+                ) {
                   void resetDemo();
                   toast("Démo réinitialisée");
                 }
@@ -210,6 +228,11 @@ export default function VenueHubPage() {
           </li>
         )}
       </ul>
+      <div className="pro-utility-links">
+        <Link href="/dashboard/history">Historique des publications</Link>
+        <Link href="/dashboard/tools">Importer et exporter</Link>
+      </div>
+      <VenueLifecycle />
     </>
   );
 }

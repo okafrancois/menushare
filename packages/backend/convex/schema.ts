@@ -36,6 +36,7 @@ export const openingHours = v.array(
 export default defineSchema({
   venues: defineTable({
     ownerId: v.string(),
+    deleting: v.optional(v.boolean()),
     name: v.string(),
     slug: v.string(),
     kind: v.string(),
@@ -124,6 +125,7 @@ export default defineSchema({
     order: v.number(),
   })
     .index("by_venue", ["venueId"])
+    .index("by_imageStorageId", ["imageStorageId"])
     .index("by_item_order", ["itemId", "order"]),
 
   menuSnapshots: defineTable({
@@ -213,6 +215,7 @@ export default defineSchema({
     table: v.optional(v.number()),
     events: v.number(),
   })
+    .index("by_venue", ["venueId"])
     .index("by_session", ["sessionId"])
     .index("by_started_at", ["startedAt"]),
 });

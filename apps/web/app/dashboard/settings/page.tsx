@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { HoursEditor, validateHours } from "@/components/dashboard/hours-editor";
+import {
+  HoursEditor,
+  validateHours,
+} from "@/components/dashboard/hours-editor";
 import { errorMessage, PageHead, useToast } from "@/components/dashboard/ui";
 import { slugify, validateSlug, type Venue } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
 
 export default function SettingsPage() {
   const { state, updateVenue } = useMenuStore();
@@ -14,14 +18,24 @@ export default function SettingsPage() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const baseline = useRef(JSON.stringify(state.venue));
+  const dirty = JSON.stringify(form) !== baseline.current;
+  useUnsavedChanges(dirty && !saving);
   const slugError = validateSlug(form.slug);
-  const publicHost = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app")
+  const publicHost = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app"
+  )
     .replace(/^https?:\/\//, "")
     .replace(/\/$/, "");
 
   // A venue switch or a save from elsewhere refreshes the form.
   const venueKey = JSON.stringify(state.venue);
-  useEffect(() => setForm(JSON.parse(venueKey) as Venue), [venueKey]);
+  useEffect(() => {
+    if (form.id !== state.venue.id || !dirty) {
+      baseline.current = venueKey;
+      setForm(JSON.parse(venueKey) as Venue);
+    }
+  }, [venueKey, state.venue.id, form.id, dirty]);
 
   function field<K extends keyof Venue>(key: K) {
     return {
@@ -56,6 +70,7 @@ export default function SettingsPage() {
         hours: form.hours.trim(),
         openingHours: form.openingHours ?? [],
       });
+      baseline.current = JSON.stringify(form);
       setStatus(
         slugChanged
           ? `Modifications enregistrées. La nouvelle adresse /menu/${slug} est active tout de suite, l’ancienne redirige ; le reste sera visible après publication.`
@@ -84,7 +99,10 @@ export default function SettingsPage() {
             </label>
             <label className="pro-field">
               <span>Type</span>
-              <input {...field("kind")} placeholder="Trattoria, bistrot, bar…" />
+              <input
+                {...field("kind")}
+                placeholder="Trattoria, bistrot, bar…"
+              />
             </label>
             <label className="pro-field">
               <span>Ville</span>
@@ -92,7 +110,10 @@ export default function SettingsPage() {
             </label>
             <label className="pro-field">
               <span>Adresse</span>
-              <input {...field("address")} placeholder="12 rue des Remparts, 33000 Bordeaux" />
+              <input
+                {...field("address")}
+                placeholder="12 rue des Remparts, 33000 Bordeaux"
+              />
             </label>
             <label className="pro-field">
               <span>Téléphone</span>
@@ -129,13 +150,18 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="pro-card" id="horaires" aria-labelledby="hours-title">
+        <section
+          className="pro-card"
+          id="horaires"
+          aria-labelledby="hours-title"
+        >
           <h2 className="pro-card-title" id="hours-title">
             Horaires d’ouverture
           </h2>
           <p className="pro-hint">
-            Ils affichent « Ouvert jusqu’à… » sur votre carte et servent d’heure
-            de retrait par défaut de la suggestion du jour.
+            Horaires à l’heure de Paris. Ils affichent « Ouvert jusqu’à… » sur
+            votre carte et servent d’heure de retrait par défaut de la
+            suggestion du jour.
           </p>
           <HoursEditor
             value={form.openingHours ?? []}

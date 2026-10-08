@@ -1,8 +1,4 @@
-import type {
-  AllergenKey,
-  DishTagKey,
-  OpeningDay,
-} from "@repo/backend/menu";
+import type { AllergenKey, DishTagKey, OpeningDay } from "@repo/backend/menu";
 import { normalizeExternalVideoUrl } from "@repo/backend/video";
 
 export type { AllergenKey, DishTagKey, OpeningDay };
@@ -62,6 +58,7 @@ export type Venue = {
   coverImageDataUrl?: string;
   coverVideo?: ExternalVideo;
   tableCount?: number;
+  status?: "draft" | "published" | "archived";
 };
 
 export type MenuSnapshot = {
@@ -96,12 +93,19 @@ export type MenuState = {
   published?: MenuSnapshot;
   changedAt: number;
   live: LiveService;
+  history?: MenuSnapshot[];
+  previousSlugs?: string[];
 };
 
 export const STORAGE_KEY = "menushare.demo.v1";
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 export const DEMO_VENUE_ID = "venue-demo";
-export const DEMO_POPULAR_IDS = ["burrata", "tagliatelle", "tiramisu", "vongole"];
+export const DEMO_POPULAR_IDS = [
+  "burrata",
+  "tagliatelle",
+  "tiramisu",
+  "vongole",
+];
 export const RESERVED_SLUGS = new Set([
   "api",
   "dashboard",
@@ -110,6 +114,10 @@ export const RESERVED_SLUGS = new Set([
   "sign-in",
   "sign-up",
   "support",
+  "help",
+  "privacy",
+  "terms",
+  "preview",
 ]);
 
 export function emptyLiveService(): LiveService {
@@ -220,7 +228,10 @@ export function move<T>(items: T[], from: number, to: number) {
 }
 
 /** Applies an explicit order of ids; unknown or missing ids keep the list. */
-export function reorderById<T extends { id: string }>(items: T[], ids: string[]) {
+export function reorderById<T extends { id: string }>(
+  items: T[],
+  ids: string[],
+) {
   if (
     ids.length !== items.length ||
     items.some((item) => !ids.includes(item.id))
@@ -239,6 +250,10 @@ export function publishMenu(state: MenuState, now = Date.now()): MenuState {
   const source = cloneSnapshotSource(state);
   return {
     ...state,
+    venue: { ...state.venue, status: "published" },
+    history: state.published
+      ? [state.published, ...(state.history ?? [])].slice(0, 9)
+      : state.history,
     published: {
       ...source,
       publishedAt: now,
@@ -486,7 +501,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
           createItem({
             id: "panna-cotta",
             name: "Panna Cotta ai Frutti Rossi",
-            description: "Crème vanille de Madagascar, coulis de fruits rouges.",
+            description:
+              "Crème vanille de Madagascar, coulis de fruits rouges.",
             price: "8",
             allergens: ["lait"],
             tags: ["vegetarien"],
@@ -576,7 +592,10 @@ export function hydrateMenuState(value: unknown): MenuState {
   const live = candidate.live;
   return {
     ...(candidate as MenuState),
-    venue: { ...candidate.venue, openingHours: candidate.venue.openingHours ?? [] },
+    venue: {
+      ...candidate.venue,
+      openingHours: candidate.venue.openingHours ?? [],
+    },
     categories: candidate.categories.map(withCategoryDefaults),
     published: candidate.published
       ? {

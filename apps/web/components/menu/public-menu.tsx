@@ -38,7 +38,10 @@ import {
   telUrl,
   type SelectionLine,
 } from "@/components/menu/menu-sheets";
-import { MenuTrackerProvider, useMenuTracker } from "@/components/menu/menu-tracker";
+import {
+  MenuTrackerProvider,
+  useMenuTracker,
+} from "@/components/menu/menu-tracker";
 import { VideoModal } from "@/components/menu/menu-video";
 import { readableInk, safeAccent } from "@/lib/color";
 import { convex } from "@/lib/convex";
@@ -74,6 +77,8 @@ import {
 import { toLiveData, toMenuSnapshot } from "@/lib/menu-snapshot";
 import { useMenuStore } from "@/lib/menu-store";
 import { openingStatus } from "@/lib/opening-hours";
+import { ConnectionNotice } from "@/components/connection-notice";
+import { PrivacyChoice } from "@/components/menu/privacy-choice";
 
 type PublicLive = Pick<LiveService, "soldOutIds" | "special">;
 
@@ -83,10 +88,27 @@ export function PublicMenu({ slug }: { slug: string }) {
 }
 
 function MenuLoading() {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, []);
   return (
     <main className="public-loading pm-root">
       <span className="pm-loader" aria-hidden="true" />
       Chargement du menu…
+      <ConnectionNotice />
+      {slow ? (
+        <div>
+          <p>Le chargement prend plus de temps que prévu.</p>
+          <button
+            className="pm-btn line"
+            onClick={() => window.location.reload()}
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -105,17 +127,22 @@ function MenuNotFound() {
 }
 
 function LocalPublicMenu({ slug }: { slug: string }) {
-  const { state, hydrated } = useMenuStore();
+  const { state: selected, localStates, hydrated } = useMenuStore();
+  const state = (localStates ?? [selected]).find(
+    (entry) => entry.venue.slug === slug || entry.previousSlugs?.includes(slug),
+  );
   const snapshot =
-    state.published?.venue.slug === slug ? state.published : undefined;
+    state?.venue.status === "archived" || state?.venue.status === "draft"
+      ? undefined
+      : state?.published;
 
   if (!hydrated) return <MenuLoading />;
   if (!snapshot) return <MenuNotFound />;
   return (
     <PublishedMenu
       snapshot={snapshot}
-      live={state.live}
-      popularIds={state.venue.id === DEMO_VENUE_ID ? DEMO_POPULAR_IDS : []}
+      live={state!.live}
+      popularIds={state!.venue.id === DEMO_VENUE_ID ? DEMO_POPULAR_IDS : []}
     />
   );
 }
@@ -168,7 +195,10 @@ function usePopularItems(venueId: string) {
   useEffect(() => {
     let cancelled = false;
     client
-      .query(api.analytics.popularItems, { venueId, today: statsDay(Date.now()) })
+      .query(api.analytics.popularItems, {
+        venueId,
+        today: statsDay(Date.now()),
+      })
       .then((result) => {
         if (!cancelled) setIds(result);
       })
@@ -214,9 +244,9 @@ function readVisitContext(slug: string): VisitContext {
       sessionStorage.setItem(key, JSON.stringify(context));
       return context;
     }
-    const stored = JSON.parse(sessionStorage.getItem(key) ?? "null") as
-      | VisitContext
-      | null;
+    const stored = JSON.parse(
+      sessionStorage.getItem(key) ?? "null",
+    ) as VisitContext | null;
     if (stored && typeof stored.inVenue === "boolean") return stored;
   } catch {
     // Storage can be unavailable in private browsing.
@@ -246,7 +276,13 @@ function specialToDish(special: DailySpecial): SheetDish {
     priceCents: special.priceCents,
     available: true,
     images: special.imageUrl
-      ? [{ id: `special-image-${special.id}`, dataUrl: special.imageUrl, alt: special.name }]
+      ? [
+          {
+            id: `special-image-${special.id}`,
+            dataUrl: special.imageUrl,
+            alt: special.name,
+          },
+        ]
       : [],
     ingredients: [],
     tags: [],
@@ -260,14 +296,16 @@ function specialToDish(special: DailySpecial): SheetDish {
 
 type Panel = "selection" | "waiter" | "info" | "allergens" | "search" | "story";
 
-function PublishedMenu({
+export function PublishedMenu({
   snapshot,
   live,
   popularIds,
+  preview = false,
 }: {
   snapshot: MenuSnapshot;
   live: PublicLive;
   popularIds: string[];
+  preview?: boolean;
 }) {
   const { venue } = snapshot;
   const tracker = useMenuTracker();
@@ -358,7 +396,10 @@ function PublishedMenu({
     [active, categories, filter],
   );
   const totalCount = categories.reduce((n, c) => n + c.items.length, 0);
-  const visibleCount = visibleCategories.reduce((n, c) => n + c.items.length, 0);
+  const visibleCount = visibleCategories.reduce(
+    (n, c) => n + c.items.length,
+    0,
+  );
   const hiddenCount = totalCount - visibleCount;
 
   const showToast = useCallback((message: string) => {
@@ -376,6 +417,10 @@ function PublishedMenu({
     null,
   );
   useEffect(() => {
+    if (preview) {
+      setSelectionReady(true);
+      return;
+    }
     const key = selectionStorageKey(venue.id);
     const valid = new Set(orderables.keys());
     if (sharedSelection.current?.venueId !== venue.id) {
@@ -413,7 +458,7 @@ function PublishedMenu({
   }, [venue.id]);
 
   useEffect(() => {
-    if (!selectionReady) return;
+    if (!selectionReady || preview) return;
     try {
       localStorage.setItem(
         selectionStorageKey(venue.id),
@@ -456,7 +501,9 @@ function PublishedMenu({
 
   useEffect(() => {
     const nav = tabsRef.current;
-    const tab = nav?.querySelector<HTMLElement>(`[data-tab="${activeCategory}"]`);
+    const tab = nav?.querySelector<HTMLElement>(
+      `[data-tab="${activeCategory}"]`,
+    );
     if (!nav || !tab) return;
     nav.scrollTo({
       left: tab.offsetLeft - nav.clientWidth / 2 + tab.offsetWidth / 2,
@@ -493,6 +540,10 @@ function PublishedMenu({
   }
 
   async function shareSelection() {
+    if (preview) {
+      showToast("Le partage sera disponible sur la carte publiée.");
+      return;
+    }
     const url = `${window.location.origin}/menu/${venue.slug}?sel=${encodeSelection(selection)}`;
     try {
       if (navigator.share) {
@@ -542,10 +593,14 @@ function PublishedMenu({
   const avoidedOthers = filter.avoid.filter((key) => key !== "gluten").length;
   const railItems = popular
     .map((id) => items.get(id)!)
-    .filter((item) => item.images.length && !(active && isHiddenByFilter(item, filter)));
+    .filter(
+      (item) =>
+        item.images.length && !(active && isHiddenByFilter(item, filter)),
+    );
 
   return (
     <main className="public-menu pm-root" style={style}>
+      <ConnectionNotice />
       <header
         ref={heroRef}
         className={`pm-hero ${inVenue ? "" : "direct"}`}
@@ -584,7 +639,9 @@ function PublishedMenu({
               </span>
             ) : null}
             {showStatus ? (
-              <span className={`pm-hero-chip ${status.open ? "open" : "closed"}`}>
+              <span
+                className={`pm-hero-chip ${status.open ? "open" : "closed"}`}
+              >
                 <span className="pm-dot" aria-hidden="true" /> {status.label}
               </span>
             ) : null}
@@ -604,10 +661,16 @@ function PublishedMenu({
               </button>
             ) : null}
           </div>
-          {!inVenue && (directions || venue.phone || venue.openingHours?.length) ? (
+          {!inVenue &&
+          (directions || venue.phone || venue.openingHours?.length) ? (
             <div className="pm-hero-actions">
               {directions ? (
-                <a className="pm-glass" href={directions} target="_blank" rel="noreferrer">
+                <a
+                  className="pm-glass"
+                  href={directions}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <Navigation size={15} /> Itinéraire
                 </a>
               ) : null}
@@ -616,7 +679,11 @@ function PublishedMenu({
                   <Phone size={15} /> Appeler
                 </a>
               ) : null}
-              <button className="pm-glass" type="button" onClick={() => setPanel("info")}>
+              <button
+                className="pm-glass"
+                type="button"
+                onClick={() => setPanel("info")}
+              >
                 <Clock3 size={15} /> Horaires
               </button>
             </div>
@@ -635,14 +702,20 @@ function PublishedMenu({
             >
               <Search size={20} />
             </button>
-            <nav ref={tabsRef} className="pm-tabs" aria-label="Catégories du menu">
+            <nav
+              ref={tabsRef}
+              className="pm-tabs"
+              aria-label="Catégories du menu"
+            >
               {categories.map((category) => (
                 <button
                   key={category.id}
                   type="button"
                   data-tab={category.id}
                   className={category.id === activeCategory ? "on" : ""}
-                  aria-current={category.id === activeCategory ? "true" : undefined}
+                  aria-current={
+                    category.id === activeCategory ? "true" : undefined
+                  }
                   onClick={() => goToCategory(category.id)}
                 >
                   {category.name}
@@ -651,7 +724,11 @@ function PublishedMenu({
             </nav>
           </div>
         ) : null}
-        <div className="pm-filters" role="group" aria-label="Filtres de la carte">
+        <div
+          className="pm-filters"
+          role="group"
+          aria-label="Filtres de la carte"
+        >
           {categories.length > 1 ? null : (
             <button
               className="pm-chip icon"
@@ -696,7 +773,9 @@ function PublishedMenu({
             onClick={() => setPanel("allergens")}
           >
             <ShieldAlert size={15} /> Allergies
-            {avoidedOthers ? <span className="pm-count">{avoidedOthers}</span> : null}
+            {avoidedOthers ? (
+              <span className="pm-count">{avoidedOthers}</span>
+            ) : null}
           </button>
         </div>
       </div>
@@ -724,14 +803,20 @@ function PublishedMenu({
               onClick={() => openDish(specialDish.id)}
             >
               {special.imageUrl ? (
-                <img src={special.imageUrl} alt="" className="pm-special-photo" />
+                <img
+                  src={special.imageUrl}
+                  alt=""
+                  className="pm-special-photo"
+                />
               ) : null}
               <span>
                 <span className="pm-eyebrow">
                   <CalendarDays size={13} /> Suggestion du jour
                 </span>
                 <strong>{special.name}</strong>
-                {special.description ? <span>{special.description}</span> : null}
+                {special.description ? (
+                  <span>{special.description}</span>
+                ) : null}
                 <span className="pm-special-price">
                   {formatPrice(special.priceCents)}
                   <small> · jusqu’à épuisement</small>
@@ -765,11 +850,17 @@ function PublishedMenu({
                     onClick={() => openDish(item.id)}
                   >
                     <span className="pm-rail-photo">
-                      <img src={item.images[0]!.dataUrl} alt="" loading="lazy" />
+                      <img
+                        src={item.images[0]!.dataUrl}
+                        alt=""
+                        loading="lazy"
+                      />
                       <span className="pm-rank">N°{index + 1}</span>
                     </span>
                     <strong>{item.name}</strong>
-                    <span className="pm-price">{formatPrice(item.priceCents)}</span>
+                    <span className="pm-price">
+                      {formatPrice(item.priceCents)}
+                    </span>
                   </button>
                   <AddButton
                     name={item.name}
@@ -829,13 +920,17 @@ function PublishedMenu({
         ) : null}
 
         <footer className="pm-footer public-footer">
+          {!preview ? <PrivacyChoice /> : null}
           <p>
             Allergènes : informations fournies par l’établissement, sur chaque
             plat. En cas d’allergie, prévenez le serveur.
           </p>
           <p>
-            {venue.name} · Menu propulsé par{" "}
-            <Link href="/">MenuShare</Link>
+            {venue.name} · Menu propulsé par <Link href="/">MenuShare</Link>
+          </p>
+          <p>
+            <Link href="/privacy">Confidentialité et préférences</Link> ·{" "}
+            <Link href="/help">Aide</Link>
           </p>
         </footer>
       </div>

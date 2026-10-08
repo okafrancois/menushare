@@ -1,5 +1,7 @@
 "use client";
 
+import { GettingStarted } from "@/components/dashboard/getting-started";
+
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/data-model";
 import { useQuery } from "convex/react";
@@ -75,7 +77,8 @@ export default function ServicePage() {
   async function share() {
     const url = menuUrl(state.venue.slug);
     try {
-      if (navigator.share) await navigator.share({ title: state.venue.name, url });
+      if (navigator.share)
+        await navigator.share({ title: state.venue.name, url });
       else await copyLink();
     } catch {
       // Sharing cancelled.
@@ -93,6 +96,7 @@ export default function ServicePage() {
         title={`${evening ? "Bonsoir" : "Bonjour"}, ${state.venue.name}`}
       />
 
+      <GettingStarted />
       {remote && state.venue.id ? (
         <RemoteToday venueId={state.venue.id as Id<"venues">} now={now} />
       ) : (
@@ -100,7 +104,10 @@ export default function ServicePage() {
           <div className="pro-card-head">
             <div>
               <h2>Aujourd’hui</h2>
-              <p>Les scans, plats consultés et temps de lecture s’affichent ici dès que votre carte est publiée depuis un compte MenuShare.</p>
+              <p>
+                Les scans, plats consultés et temps de lecture s’affichent ici
+                dès que votre carte est publiée depuis un compte MenuShare.
+              </p>
             </div>
           </div>
         </section>
@@ -132,7 +139,10 @@ export default function ServicePage() {
                 </li>
               ) : null}
             </ul>
-            <Link className="pro-btn dark small" href="/dashboard/menu?filtre=a-completer">
+            <Link
+              className="pro-btn dark small"
+              href="/dashboard/menu?filtre=a-completer"
+            >
               Compléter la carte
             </Link>
           </div>
@@ -168,7 +178,8 @@ function RemoteToday({
     api.analytics.getDaySummary,
     today ? { venueId, today } : "skip",
   );
-  const weekday = now === null ? "" : DAY_NAMES[parisTime(now).day]!.toLowerCase();
+  const weekday =
+    now === null ? "" : DAY_NAMES[parisTime(now).day]!.toLowerCase();
   return (
     <section className="pro-card">
       <div className="pro-card-head">
@@ -274,7 +285,9 @@ function AvailabilityCard({ moment }: { moment: string }) {
                 <span className="pro-row-copy">
                   <strong>{item.name}</strong>
                   <small>
-                    {available ? formatPrice(item.priceCents) : "Épuisé · affiché en salle"}
+                    {available
+                      ? formatPrice(item.priceCents)
+                      : "Épuisé · affiché en salle"}
                   </small>
                 </span>
                 <Switch
@@ -287,7 +300,9 @@ function AvailabilityCard({ moment }: { moment: string }) {
           })}
         </ul>
       ) : (
-        <p className="pro-muted">Ajoutez des plats à votre carte pour gérer leur disponibilité.</p>
+        <p className="pro-muted">
+          Ajoutez des plats à votre carte pour gérer leur disponibilité.
+        </p>
       )}
       <Link className="pro-row-link" href="/dashboard/menu">
         Toute la carte <ChevronRight size={16} />
@@ -298,7 +313,9 @@ function AvailabilityCard({ moment }: { moment: string }) {
         </span>
         <span className="pro-row-copy">
           <strong>Remettre en stock chaque nuit</strong>
-          <small>Les plats épuisés redeviennent disponibles en fin de nuit</small>
+          <small>
+            Les plats épuisés redeviennent disponibles en fin de nuit
+          </small>
         </span>
         <Switch
           checked={state.live.autoRestock}
@@ -360,7 +377,11 @@ function SpecialCard() {
             </span>
           </div>
           <div className="pro-btn-row">
-            <button className="pro-btn ghost small" type="button" onClick={() => setEditing(true)}>
+            <button
+              className="pro-btn ghost small"
+              type="button"
+              onClick={() => setEditing(true)}
+            >
               Modifier
             </button>
             <button
@@ -380,7 +401,11 @@ function SpecialCard() {
           </div>
         </>
       ) : (
-        <button className="pro-btn primary block" type="button" onClick={() => setEditing(true)}>
+        <button
+          className="pro-btn primary block"
+          type="button"
+          onClick={() => setEditing(true)}
+        >
           Proposer une suggestion du jour
         </button>
       )}

@@ -47,6 +47,11 @@ async function releaseFile(
   menu: Doc<"menus">,
   storageId: Id<"_storage">,
 ) {
+  const references = await ctx.db
+    .query("media")
+    .withIndex("by_imageStorageId", (q) => q.eq("imageStorageId", storageId))
+    .take(2);
+  if (references.length > 1) return;
   if (menu.publishedSnapshotId) {
     await ctx.db.insert("pendingFileDeletions", {
       venueId: menu.venueId,
@@ -69,31 +74,49 @@ async function purgePendingFileBatch(
   venueId: Id<"venues">,
   published: Set<string>,
   before: number,
+  cursor: string | null = null,
 ) {
-  const rows = await ctx.db
+  // The last ten publications remain restorable, including their photos.
+  const current = new Set(published);
+  const revisions = await ctx.db
+    .query("menuSnapshots")
+    .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+    .order("desc")
+    .take(10);
+  for (const revision of revisions) storageIdsIn(revision.data, published);
+  const page = await ctx.db
     .query("pendingFileDeletions")
     .withIndex("by_venue", (q) =>
       q.eq("venueId", venueId).lte("_creationTime", before),
     )
-    .take(FILE_PURGE_BATCH);
-  for (const row of rows) {
+    .paginate({ cursor, numItems: FILE_PURGE_BATCH });
+  for (const row of page.page) {
+    if (current.has(row.storageId)) {
+      await ctx.db.delete("pendingFileDeletions", row._id);
+      continue;
+    }
     if (!published.has(row.storageId)) {
       await deleteFileIfPresent(ctx, row.storageId);
+      await ctx.db.delete("pendingFileDeletions", row._id);
     }
-    await ctx.db.delete("pendingFileDeletions", row._id);
   }
-  if (rows.length === FILE_PURGE_BATCH) {
+  if (!page.isDone) {
     await ctx.scheduler.runAfter(0, internal.menus.purgePendingFiles, {
       venueId,
       before,
+      cursor: page.continueCursor,
     });
   }
 }
 
 export const purgePendingFiles = internalMutation({
-  args: { venueId: v.id("venues"), before: v.number() },
+  args: {
+    venueId: v.id("venues"),
+    before: v.number(),
+    cursor: v.optional(v.string()),
+  },
   returns: v.null(),
-  handler: async (ctx, { venueId, before }) => {
+  handler: async (ctx, { venueId, before, cursor }) => {
     const menus = await ctx.db
       .query("menus")
       .withIndex("by_venue", (q) => q.eq("venueId", venueId))
@@ -105,7 +128,7 @@ export const purgePendingFiles = internalMutation({
         : null;
       if (snapshot) storageIdsIn(snapshot.data, published);
     }
-    await purgePendingFileBatch(ctx, venueId, published, before);
+    await purgePendingFileBatch(ctx, venueId, published, before, cursor);
     return null;
   },
 });
@@ -189,6 +212,7 @@ export const addCategory = mutation({
       .query("categories")
       .withIndex("by_menu_order", (q) => q.eq("menuId", args.menuId))
       .take(100);
+    if (categories.length >= 100) throw new Error("CATEGORY_LIMIT_REACHED");
     const categoryId = await ctx.db.insert("categories", {
       menuId: args.menuId,
       name: args.name.trim(),
@@ -297,6 +321,7 @@ export const addItem = mutation({
         q.eq("categoryId", args.categoryId),
       )
       .take(200);
+    if (items.length >= 200) throw new Error("ITEM_LIMIT_REACHED");
     const itemId = await ctx.db.insert("menuItems", {
       categoryId: args.categoryId,
       name: args.name.trim(),
@@ -623,6 +648,12 @@ export const publish = mutation({
       publishedAt,
       data,
     });
+    const revisions = await ctx.db
+      .query("menuSnapshots")
+      .withIndex("by_menu_version", (q) => q.eq("menuId", menuId))
+      .order("desc")
+      .take(11);
+    for (const old of revisions.slice(10)) await ctx.db.delete(old._id);
     await ctx.db.patch(menuId, {
       status: "published",
       version,
@@ -659,12 +690,8 @@ export const getPublishedBySlug = query({
         .withIndex("by_slug", (q) => q.eq("slug", slug))
         .unique();
       if (!history?.redirectedTo) return null;
-      const redirectSlug = history.redirectedTo;
       redirectedFrom = slug;
-      venue = await ctx.db
-        .query("venues")
-        .withIndex("by_slug", (q) => q.eq("slug", redirectSlug))
-        .unique();
+      venue = await ctx.db.get("venues", history.venueId);
     }
 
     if (!venue || venue.status !== "published") return null;
@@ -678,7 +705,12 @@ export const getPublishedBySlug = query({
     if (!snapshot) return null;
     // Storage identifiers and the owner id stay private. Live service state
     // is served by getLiveService so that it does not resend the whole menu.
-    return { ...withoutPrivateFields(snapshot.data), redirectedFrom };
+    const published = withoutPrivateFields(snapshot.data);
+    return {
+      ...published,
+      venue: { ...published.venue, slug: venue.slug },
+      redirectedFrom,
+    };
   },
 });
 
@@ -727,5 +759,261 @@ export const getPublishedSnapshot = query({
     if (!menu.publishedSnapshotId) return null;
     const snapshot = await ctx.db.get(menu.publishedSnapshotId);
     return snapshot ? snapshot.data : null;
+  },
+});
+
+export const listVersions = query({
+  args: { menuId: v.id("menus") },
+  handler: async (ctx, { menuId }) => {
+    await ownedMenuOrThrow(ctx, menuId);
+    const snapshots = await ctx.db
+      .query("menuSnapshots")
+      .withIndex("by_menu_version", (q) => q.eq("menuId", menuId))
+      .order("desc")
+      .take(10);
+    return snapshots.map((snapshot) => snapshot.data);
+  },
+});
+
+type SnapshotData = {
+  venue: Doc<"venues">;
+  categories: (Doc<"categories"> & {
+    items: (Doc<"menuItems"> & {
+      media: (Doc<"media"> & { imageUrl?: string | null })[];
+    })[];
+  })[];
+};
+
+export const restoreVersion = mutation({
+  args: { menuId: v.id("menus"), version: v.number() },
+  handler: async (ctx, { menuId, version }) => {
+    const { menu, venue } = await ownedMenuOrThrow(ctx, menuId);
+    const revision = await ctx.db
+      .query("menuSnapshots")
+      .withIndex("by_menu_version", (q) =>
+        q.eq("menuId", menuId).eq("version", version),
+      )
+      .unique();
+    if (!revision) throw new Error("VERSION_NOT_FOUND");
+    const data = revision.data as SnapshotData;
+    const categories = await ctx.db
+      .query("categories")
+      .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
+      .take(100);
+    for (const category of categories) {
+      const items = await ctx.db
+        .query("menuItems")
+        .withIndex("by_category_order", (q) => q.eq("categoryId", category._id))
+        .take(200);
+      for (const item of items) {
+        const media = await ctx.db
+          .query("media")
+          .withIndex("by_item_order", (q) => q.eq("itemId", item._id))
+          .take(20);
+        for (const asset of media) {
+          if (asset.imageStorageId)
+            await releaseFile(ctx, menu, asset.imageStorageId);
+          await ctx.db.delete(asset._id);
+        }
+        await clearSoldOut(ctx, item._id);
+        await ctx.db.delete(item._id);
+      }
+      await ctx.db.delete(category._id);
+    }
+    for (const category of data.categories) {
+      const categoryId = await ctx.db.insert("categories", {
+        menuId,
+        name: category.name,
+        eyebrow: category.eyebrow,
+        order: category.order,
+        active: category.active,
+      });
+      for (const raw of category.items) {
+        const { _id, _creationTime, media, ...fields } = raw;
+        const itemId = await ctx.db.insert("menuItems", {
+          ...fields,
+          categoryId,
+        });
+        for (const asset of media) {
+          const {
+            _id: assetId,
+            _creationTime: created,
+            imageUrl,
+            ...assetFields
+          } = asset;
+          if (
+            asset.imageStorageId &&
+            !(await ctx.db.system.get("_storage", asset.imageStorageId))
+          )
+            continue;
+          await ctx.db.insert("media", {
+            ...assetFields,
+            itemId,
+            venueId: venue._id,
+          });
+        }
+      }
+    }
+    const profile = data.venue;
+    for (const oldFile of new Set([
+      venue.logoStorageId,
+      venue.coverImageStorageId,
+    ])) {
+      if (
+        oldFile &&
+        oldFile !== profile.logoStorageId &&
+        oldFile !== profile.coverImageStorageId
+      ) {
+        await ctx.db.insert("pendingFileDeletions", {
+          venueId: venue._id,
+          storageId: oldFile,
+        });
+      }
+    }
+    await ctx.db.patch(venue._id, {
+      name: profile.name,
+      kind: profile.kind,
+      city: profile.city,
+      tagline: profile.tagline,
+      description: profile.description,
+      phone: profile.phone,
+      address: profile.address,
+      hours: profile.hours,
+      openingHours: profile.openingHours,
+      accentColor: profile.accentColor,
+      logoStorageId: profile.logoStorageId,
+      coverImageStorageId: profile.coverImageStorageId,
+      coverVideoProvider: profile.coverVideoProvider,
+      coverVideoExternalId: profile.coverVideoExternalId,
+      coverVideoEmbedUrl: profile.coverVideoEmbedUrl,
+    });
+    await touchMenu(ctx, menuId);
+  },
+});
+
+export const duplicateItem = mutation({
+  args: { itemId: v.id("menuItems") },
+  handler: async (ctx, { itemId }) => {
+    const { item, category, menuId } = await menuIdForItem(ctx, itemId);
+    const items = await ctx.db
+      .query("menuItems")
+      .withIndex("by_category_order", (q) => q.eq("categoryId", category._id))
+      .take(200);
+    if (items.length >= 200) throw new Error("ITEM_LIMIT_REACHED");
+    const { _id, _creationTime, ...fields } = item;
+    const id = await ctx.db.insert("menuItems", {
+      ...fields,
+      name: `${item.name} (copie)`,
+      order: Math.max(-1, ...items.map((i) => i.order)) + 1,
+    });
+    const media = await ctx.db
+      .query("media")
+      .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
+      .take(20);
+    for (const asset of media) {
+      const { _id: assetId, _creationTime: created, ...assetFields } = asset;
+      await ctx.db.insert("media", { ...assetFields, itemId: id });
+    }
+    await touchMenu(ctx, menuId);
+    return id;
+  },
+});
+
+export const moveItem = mutation({
+  args: { itemId: v.id("menuItems"), categoryId: v.id("categories") },
+  handler: async (ctx, { itemId, categoryId }) => {
+    const { item, menuId } = await menuIdForItem(ctx, itemId);
+    const target = await ctx.db.get(categoryId);
+    if (!target || target.menuId !== menuId) throw new Error("Forbidden");
+    if (item.categoryId === categoryId) return;
+    const items = await ctx.db
+      .query("menuItems")
+      .withIndex("by_category_order", (q) => q.eq("categoryId", categoryId))
+      .take(200);
+    if (items.length >= 200) throw new Error("ITEM_LIMIT_REACHED");
+    await ctx.db.patch(itemId, {
+      categoryId,
+      order: Math.max(-1, ...items.map((i) => i.order)) + 1,
+    });
+    await touchMenu(ctx, menuId);
+  },
+});
+
+export const importItems = mutation({
+  args: {
+    menuId: v.id("menus"),
+    rows: v.array(
+      v.object({
+        category: v.string(),
+        name: v.string(),
+        priceCents: v.number(),
+        description: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { menuId, rows }) => {
+    await ownedMenuOrThrow(ctx, menuId);
+    if (!rows.length || rows.length > 500) throw new Error("INVALID_IMPORT");
+    const categories = await ctx.db
+      .query("categories")
+      .withIndex("by_menu_order", (q) => q.eq("menuId", menuId))
+      .take(100);
+    const targets = new Map<
+      string,
+      { id: Id<"categories">; count: number; nextOrder: number }
+    >();
+    for (const category of categories) {
+      const items = await ctx.db
+        .query("menuItems")
+        .withIndex("by_category_order", (q) => q.eq("categoryId", category._id))
+        .take(200);
+      targets.set(category.name.toLocaleLowerCase("fr-FR"), {
+        id: category._id,
+        count: items.length,
+        nextOrder: Math.max(-1, ...items.map((i) => i.order)) + 1,
+      });
+    }
+    let nextOrder = Math.max(-1, ...categories.map((c) => c.order)) + 1;
+    let categoryCount = categories.length;
+    for (const row of rows) {
+      if (
+        !row.category.trim() ||
+        row.category.length > 100 ||
+        !row.name.trim() ||
+        row.name.length > 120 ||
+        row.description.length > 1000 ||
+        !Number.isSafeInteger(row.priceCents) ||
+        row.priceCents < 0
+      )
+        throw new Error("INVALID_IMPORT");
+      const key = row.category.trim().toLocaleLowerCase("fr-FR");
+      let target = targets.get(key);
+      if (!target) {
+        if (categoryCount >= 100) throw new Error("CATEGORY_LIMIT_REACHED");
+        target = {
+          id: await ctx.db.insert("categories", {
+            menuId,
+            name: row.category.trim(),
+            order: nextOrder++,
+            active: true,
+          }),
+          count: 0,
+          nextOrder: 0,
+        };
+        targets.set(key, target);
+        categoryCount++;
+      }
+      if (target.count >= 200) throw new Error("ITEM_LIMIT_REACHED");
+      await ctx.db.insert("menuItems", {
+        categoryId: target.id,
+        name: row.name.trim(),
+        description: row.description.trim(),
+        priceCents: row.priceCents,
+        active: true,
+        order: target.nextOrder++,
+      });
+      target.count++;
+    }
+    await touchMenu(ctx, menuId);
   },
 });

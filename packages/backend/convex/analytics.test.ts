@@ -265,7 +265,10 @@ describe("analytics tracking", () => {
         days: 7,
       }),
     ).rejects.toThrow("Forbidden");
-    await expect(stats(ctx, 12)).rejects.toThrow("INVALID_PERIOD");
+    await expect(stats(ctx, 91)).rejects.toThrow("INVALID_PERIOD");
+    await expect(stats(ctx, 12)).resolves.toMatchObject({
+      period: { days: 12 },
+    });
   });
 
   it("purges visitor identifiers and stale sessions", async () => {

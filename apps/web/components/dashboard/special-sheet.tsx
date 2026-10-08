@@ -1,9 +1,15 @@
 "use client";
 
 import { Camera, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
 
-import { errorMessage, ProSheet, SheetHead, useToast } from "@/components/dashboard/ui";
+import {
+  errorMessage,
+  ProSheet,
+  SheetHead,
+  useToast,
+} from "@/components/dashboard/ui";
 import { fileToDataUrl } from "@/lib/image-file";
 import {
   parsePriceToCents,
@@ -24,7 +30,10 @@ const clock = new Intl.DateTimeFormat("fr-FR", {
   timeZone: "Europe/Paris",
 });
 
-function defaultEndTime(special: DailySpecial | undefined, hours: Parameters<typeof closingTimeToday>[0]) {
+function defaultEndTime(
+  special: DailySpecial | undefined,
+  hours: Parameters<typeof closingTimeToday>[0],
+) {
   if (special) return clock.format(special.endsAt);
   return closingTimeToday(hours, Date.now()) ?? "23:00";
 }
@@ -48,6 +57,14 @@ export function SpecialSheet({
   const [image, setImage] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const formKey = JSON.stringify({ name, price, description, endTime, image });
+  const initial = useRef(formKey);
+  const dirty = formKey !== initial.current;
+  useUnsavedChanges(dirty && !saving);
+  function requestClose() {
+    if (!dirty || confirm("Abandonner les modifications non enregistrées ?"))
+      onClose();
+  }
   const preview = image === undefined ? special?.imageUrl : image;
   const endLabel = /^\d{2}:\d{2}$/.test(endTime)
     ? `${statsDay(nextOccurrence(endTime, Date.now())) === statsDay(Date.now()) ? "Aujourd’hui" : "Demain"} à ${formatTime(endTime)}`
@@ -77,12 +94,12 @@ export function SpecialSheet({
   }
 
   return (
-    <ProSheet onClose={onClose} labelledBy="special-sheet-title">
+    <ProSheet onClose={requestClose} labelledBy="special-sheet-title">
       <SheetHead
         id="special-sheet-title"
         title="Suggestion du jour"
         subtitle="Visible en tête de carte dès l’enregistrement, sans publier."
-        onClose={onClose}
+        onClose={requestClose}
       />
       <div className="pro-sheet-body">
         <div className="pro-photos">
@@ -151,8 +168,7 @@ export function SpecialSheet({
           </label>
           <label className="pro-field inline">
             <span>
-              Retirer de la carte à
-              {endLabel ? <small>{endLabel}</small> : null}
+              Retirer de la carte à{endLabel ? <small>{endLabel}</small> : null}
             </span>
             <input
               type="time"

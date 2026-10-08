@@ -11,23 +11,44 @@ import { useMenuStore } from "@/lib/menu-store";
 export function ProtectedWorkspace({
   children,
   mode,
+  allowEmpty = false,
 }: {
   children: ReactNode;
   mode: "dashboard" | "onboarding";
+  allowEmpty?: boolean;
 }) {
-  const { remote } = useMenuStore();
-  if (!remote) return children;
+  const { remote, state, hydrated } = useMenuStore();
+  const router = useRouter();
+  const needsVenue =
+    !remote &&
+    hydrated &&
+    !state.venue.id &&
+    mode === "dashboard" &&
+    !allowEmpty;
+  useEffect(() => {
+    if (needsVenue) router.replace("/onboarding");
+  }, [needsVenue, router]);
+  if (!remote)
+    return needsVenue ? (
+      <main className="public-loading">Chargement de votre espace…</main>
+    ) : (
+      children
+    );
   return (
-    <RemoteProtectedWorkspace mode={mode}>{children}</RemoteProtectedWorkspace>
+    <RemoteProtectedWorkspace mode={mode} allowEmpty={allowEmpty}>
+      {children}
+    </RemoteProtectedWorkspace>
   );
 }
 
 function RemoteProtectedWorkspace({
   children,
   mode,
+  allowEmpty,
 }: {
   children: ReactNode;
   mode: "dashboard" | "onboarding";
+  allowEmpty: boolean;
 }) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
@@ -60,7 +81,7 @@ function RemoteProtectedWorkspace({
     hydrated,
     hasSession: Boolean(session),
     convexAuthenticated: convexAuth.isAuthenticated,
-    hasVenue: Boolean(state.venue.id),
+    hasVenue: Boolean(state.venue.id) || allowEmpty,
     mode,
   });
 

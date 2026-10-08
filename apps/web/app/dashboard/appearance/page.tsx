@@ -115,7 +115,7 @@ export default function AppearancePage() {
             <h2 className="pro-card-title" id="logo-title">
               Logo
             </h2>
-            <p className="pro-hint">Carré de préférence. PNG, JPG ou WebP, 2 Mo maximum.</p>
+            <p className="pro-hint">Carré de préférence. PNG, JPG ou WebP ; les grandes photos sont adaptées automatiquement.</p>
             <div className="pro-asset">
               {venue.logoDataUrl ? (
                 <img className="pro-asset-preview logo" src={venue.logoDataUrl} alt="Logo actuel" />

@@ -28,7 +28,11 @@
   margin: 0 auto;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+  font-family:
+    var(--font-ui),
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -60,7 +64,9 @@
 
 @media (min-width: 520px) {
   .pm-root {
-    box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(31, 26, 23, 0.12);
+    box-shadow:
+      0 0 0 1px var(--line),
+      0 30px 80px rgba(31, 26, 23, 0.12);
   }
 }
 
@@ -256,8 +262,16 @@
   min-height: 236px;
   padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 16px 18px;
   background:
-    radial-gradient(circle at 80% 10%, rgba(255, 255, 255, 0.18), transparent 45%),
-    linear-gradient(150deg, color-mix(in oklab, var(--accent) 75%, #000), var(--accent));
+    radial-gradient(
+      circle at 80% 10%,
+      rgba(255, 255, 255, 0.18),
+      transparent 45%
+    ),
+    linear-gradient(
+      150deg,
+      color-mix(in oklab, var(--accent) 75%, #000),
+      var(--accent)
+    );
   background-position: center;
   background-size: cover;
   color: #fff;
@@ -1602,4 +1616,48 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+.video-permission {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 220px;
+  padding: 24px;
+  text-align: center;
+  background: #231b1d;
+  color: #fff;
+}
+.video-permission p {
+  max-width: 360px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.video-permission a {
+  font-size: 13px;
+  color: inherit;
+  text-decoration: underline;
+}
+.pm-muted {
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+.pm-privacy-choice {
+  padding: 20px 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+}
+.pm-privacy-choice > div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pm-privacy-choice p {
+  line-height: 1.5;
+  margin: 10px 0;
 }

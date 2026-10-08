@@ -16,6 +16,7 @@ import {
   videoToUrl,
   type LiveService,
   type MenuState,
+  type MenuSnapshot,
 } from "@/lib/menu-domain";
 import {
   toCategories,
@@ -46,6 +47,10 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const workspace =
     venues.find(({ venue }) => venue._id === selectedVenueId) ?? venues[0];
   const menuId = workspace?.menuId;
+  const versions = useQuery(
+    api.menus.listVersions,
+    menuId ? { menuId } : "skip",
+  );
   const venueId = workspace?.venue._id;
   const draft = useQuery(api.menus.getDraft, menuId ? { menuId } : "skip");
   const publishedPayload = useQuery(
@@ -91,6 +96,12 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const setAutoRestockMutation = useMutation(api.service.setAutoRestock);
   const setDailySpecialMutation = useMutation(api.service.setDailySpecial);
   const clearDailySpecialMutation = useMutation(api.service.clearDailySpecial);
+  const setStatusMutation = useMutation(api.venues.setStatus);
+  const restoreVersionMutation = useMutation(api.menus.restoreVersion);
+  const duplicateItemMutation = useMutation(api.menus.duplicateItem);
+  const moveItemMutation = useMutation(api.menus.moveItem);
+  const importItemsMutation = useMutation(api.menus.importItems);
+  const removeVenueMutation = useMutation(api.venues.remove);
 
   // Optimistic updates: a reordered list or a sold-out toggle must not jump
   // back while the mutation travels to the server.
@@ -98,14 +109,21 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
     () =>
       reorderCategoriesBase.withOptimisticUpdate(
         (localStore, { menuId: id, categoryIds }) => {
-          const current = localStore.getQuery(api.menus.getDraft, { menuId: id });
+          const current = localStore.getQuery(api.menus.getDraft, {
+            menuId: id,
+          });
           if (!current) return;
           const byId = new Map(current.categories.map((c) => [c._id, c]));
           if (categoryIds.some((categoryId) => !byId.has(categoryId))) return;
           localStore.setQuery(
             api.menus.getDraft,
             { menuId: id },
-            { ...current, categories: categoryIds.map((categoryId) => byId.get(categoryId)!) },
+            {
+              ...current,
+              categories: categoryIds.map((categoryId) =>
+                byId.get(categoryId)!,
+              ),
+            },
           );
         },
       ),
@@ -113,37 +131,50 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   );
   const reorderItemsMutation = useMemo(
     () =>
-      reorderItemsBase.withOptimisticUpdate((localStore, { categoryId, itemIds }) => {
-        if (!menuId) return;
-        const current = localStore.getQuery(api.menus.getDraft, { menuId });
-        if (!current) return;
-        localStore.setQuery(
-          api.menus.getDraft,
-          { menuId },
-          {
-            ...current,
-            categories: current.categories.map((category) => {
-              if (category._id !== categoryId) return category;
-              const byId = new Map(category.items.map((item) => [item._id, item]));
-              if (itemIds.some((itemId) => !byId.has(itemId))) return category;
-              return { ...category, items: itemIds.map((itemId) => byId.get(itemId)!) };
-            }),
-          },
-        );
-      }),
+      reorderItemsBase.withOptimisticUpdate(
+        (localStore, { categoryId, itemIds }) => {
+          if (!menuId) return;
+          const current = localStore.getQuery(api.menus.getDraft, { menuId });
+          if (!current) return;
+          localStore.setQuery(
+            api.menus.getDraft,
+            { menuId },
+            {
+              ...current,
+              categories: current.categories.map((category) => {
+                if (category._id !== categoryId) return category;
+                const byId = new Map(
+                  category.items.map((item) => [item._id, item]),
+                );
+                if (itemIds.some((itemId) => !byId.has(itemId)))
+                  return category;
+                return {
+                  ...category,
+                  items: itemIds.map((itemId) => byId.get(itemId)!),
+                };
+              }),
+            },
+          );
+        },
+      ),
     [menuId, reorderItemsBase],
   );
   const setSoldOutMutation = useMemo(
     () =>
       setSoldOutBase.withOptimisticUpdate((localStore, { itemId, soldOut }) => {
         if (!venueId) return;
-        const current = localStore.getQuery(api.service.getServiceState, { venueId });
+        const current = localStore.getQuery(api.service.getServiceState, {
+          venueId,
+        });
         if (!current) return;
         const others = current.soldOutItemIds.filter((id) => id !== itemId);
         localStore.setQuery(
           api.service.getServiceState,
           { venueId },
-          { ...current, soldOutItemIds: soldOut ? [...others, itemId] : others },
+          {
+            ...current,
+            soldOutItemIds: soldOut ? [...others, itemId] : others,
+          },
         );
       }),
     [setSoldOutBase, venueId],
@@ -210,6 +241,32 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
 
     return {
       state,
+      async removeVenue(confirmName) {
+        await removeVenueMutation({ venueId: currentVenueId(), confirmName });
+      },
+      async importItems(rows) {
+        if (!menuId) throw new Error("MENU_NOT_FOUND");
+        await importItemsMutation({ menuId, rows });
+      },
+      history: (versions ?? [])
+        .map(toMenuSnapshot)
+        .filter((entry): entry is MenuSnapshot => entry !== null),
+      async setVenueStatus(status) {
+        await setStatusMutation({ venueId: currentVenueId(), status });
+      },
+      async restoreVersion(version) {
+        if (!menuId) throw new Error("MENU_NOT_FOUND");
+        await restoreVersionMutation({ menuId, version });
+      },
+      async duplicateItem(_categoryId, item) {
+        await duplicateItemMutation({ itemId: item.id as Id<"menuItems"> });
+      },
+      async moveItem(itemId, _fromCategoryId, categoryId) {
+        await moveItemMutation({
+          itemId: itemId as Id<"menuItems">,
+          categoryId: categoryId as Id<"categories">,
+        });
+      },
       hydrated,
       remote: true,
       venues: venues.map(({ venue }) => ({
@@ -368,9 +425,7 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           tags: patch.tags,
           pairingName: patch.pairingName,
           pairingPriceCents: clearable("pairingPriceCents") as
-            | number
-            | null
-            | undefined,
+            number | null | undefined,
           reviewRating: clearable("reviewRating") as number | null | undefined,
           reviewCount: clearable("reviewCount") as number | null | undefined,
           reviewQuote: patch.reviewQuote,
@@ -467,6 +522,13 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
     setSoldOutMutation,
     setTableCountMutation,
     state,
+    versions,
+    setStatusMutation,
+    restoreVersionMutation,
+    duplicateItemMutation,
+    moveItemMutation,
+    importItemsMutation,
+    removeVenueMutation,
     updateAppearance,
     updateCategoryMutation,
     updateItemMutation,

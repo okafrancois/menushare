@@ -16,7 +16,11 @@ import { AddButton, DietTags, DishBadges } from "@/components/menu/dish-row";
 import { CloseButton, Sheet } from "@/components/menu/menu-sheet";
 import { VideoFrame } from "@/components/menu/menu-video";
 import { allergenConflicts, allergenLabel } from "@/lib/menu-filters";
-import { formatPrice, type AllergenKey, type MenuItem } from "@/lib/menu-domain";
+import {
+  formatPrice,
+  type AllergenKey,
+  type MenuItem,
+} from "@/lib/menu-domain";
 
 export type SheetDish = MenuItem & {
   /** Suggestion of the day: never tracked, allergens given by the staff. */
@@ -107,7 +111,11 @@ export function DishSheet({
             <span className="pm-sheet-handle on-media" aria-hidden="true" />
             <CloseButton onClose={onClose} className="pm-close on-media" />
             {slides.length > 1 ? (
-              <div className="pm-dots" role="group" aria-label="Galerie du plat">
+              <div
+                className="pm-dots"
+                role="group"
+                aria-label="Galerie du plat"
+              >
                 {slides.map((entry, index) => (
                   <button
                     key={index}
@@ -160,11 +168,15 @@ export function DishSheet({
             <h3>
               <ShieldAlert size={15} /> Allergènes
             </h3>
-            <div className={`pm-allergens ${conflicts.length ? "conflict" : ""}`}>
+            <div
+              className={`pm-allergens ${conflicts.length ? "conflict" : ""}`}
+            >
               {conflicts.length ? (
                 <p className="pm-conflict" role="alert">
                   <AlertTriangle size={16} /> Contient{" "}
-                  {conflicts.map((key) => allergenLabel(key).toLowerCase()).join(", ")}
+                  {conflicts
+                    .map((key) => allergenLabel(key).toLowerCase())
+                    .join(", ")}
                   , que vous évitez.
                 </p>
               ) : null}
@@ -175,10 +187,7 @@ export function DishSheet({
               ) : item.allergens.length ? (
                 <ul>
                   {item.allergens.map((key) => (
-                    <li
-                      key={key}
-                      className={avoid.includes(key) ? "hit" : ""}
-                    >
+                    <li key={key} className={avoid.includes(key) ? "hit" : ""}>
                       {allergenLabel(key)}
                     </li>
                   ))}
@@ -225,7 +234,11 @@ export function DishSheet({
 
           {item.reviewRating !== undefined || item.reviewQuote ? (
             <section className="pm-block">
-              <h3>Avis clients</h3>
+              <h3>Témoignage partagé par l’établissement</h3>
+              <p className="pm-muted">
+                Extrait et note renseignés par l’établissement, sans
+                vérification par MenuShare.
+              </p>
               <div className="pm-review">
                 {item.reviewRating !== undefined ? (
                   <div className="pm-stars">

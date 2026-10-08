@@ -1,5 +1,7 @@
 "use client";
 
+import { csvCell, downloadFile } from "@/lib/download";
+
 import { api } from "@repo/backend/api";
 import type { Id } from "@repo/backend/data-model";
 import { useQuery } from "convex/react";
@@ -57,7 +59,7 @@ export default function StatsPage() {
   return (
     <>
       <PageHead
-        eyebrow="Mesure anonyme"
+        eyebrow="Visites avec statistiques autorisées"
         title="Statistiques"
         actions={
           <div className="pro-seg" role="group" aria-label="Période">
@@ -84,9 +86,9 @@ export default function StatsPage() {
           </span>
           <h2>Aucune statistique en mode démo.</h2>
           <p>
-            Les visites sont mesurées dès que votre menu est publié depuis un
-            compte MenuShare : scans, plats consultés, temps de lecture et
-            performance de chaque table.
+            Les visites autorisées par les visiteurs sont mesurées lorsque votre
+            menu est publié depuis un compte MenuShare : scans, plats consultés,
+            temps de lecture et performance de chaque table.
           </p>
         </section>
       )}
@@ -94,23 +96,99 @@ export default function StatsPage() {
   );
 }
 
-function RemoteStats({ venueId, days }: { venueId: Id<"venues">; days: number }) {
+function RemoteStats({
+  venueId,
+  days,
+}: {
+  venueId: Id<"venues">;
+  days: number;
+}) {
   // The query must not read the clock: the browser supplies today and
   // refreshes it after midnight.
   const [today, setToday] = useState(() => statsDay(Date.now()));
   useEffect(() => {
-    const timer = window.setInterval(() => setToday(statsDay(Date.now())), 60_000);
+    const timer = window.setInterval(
+      () => setToday(statsDay(Date.now())),
+      60_000,
+    );
     return () => window.clearInterval(timer);
   }, []);
-  const stats = useQuery(api.analytics.getStats, { venueId, today, days });
-  if (stats === undefined)
-    return <p className="pro-muted">Chargement des statistiques…</p>;
-  return <StatsReport stats={stats} />;
+  const [custom, setCustom] = useState(false);
+  const [start, setStart] = useState(today);
+  const [end, setEnd] = useState(today);
+  const customDays =
+    Math.round((Date.parse(end) - Date.parse(start)) / 86400000) + 1;
+  const valid =
+    !custom ||
+    (Number.isInteger(customDays) &&
+      customDays >= 1 &&
+      customDays <= 90 &&
+      end <= today);
+  const stats = useQuery(
+    api.analytics.getStats,
+    valid
+      ? {
+          venueId,
+          today: custom ? end : today,
+          days: custom ? customDays : days,
+        }
+      : "skip",
+  );
+  return (
+    <>
+      <section className="pro-card">
+        <label className="pro-checklist">
+          <span>
+            <input
+              type="checkbox"
+              checked={custom}
+              onChange={(event) => setCustom(event.target.checked)}
+            />{" "}
+            Choisir mes dates
+          </span>
+        </label>
+        {custom ? (
+          <div className="pro-inline-form">
+            <label className="pro-field">
+              <span>Du</span>
+              <input
+                type="date"
+                value={start}
+                max={end}
+                onChange={(event) => setStart(event.target.value)}
+              />
+            </label>
+            <label className="pro-field">
+              <span>Au</span>
+              <input
+                type="date"
+                value={end}
+                min={start}
+                max={today}
+                onChange={(event) => setEnd(event.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
+        {!valid ? (
+          <p className="pro-error" role="alert">
+            Choisissez une période passée ou actuelle de 1 à 90 jours.
+          </p>
+        ) : null}
+      </section>
+      {valid && !stats ? (
+        <p className="pro-muted">Chargement des statistiques…</p>
+      ) : stats && valid ? (
+        <StatsReport stats={stats} historical={custom && end !== today} />
+      ) : null}
+    </>
+  );
 }
 
 function delta(current: number | null, previous: number | null) {
   if (current === null || previous === null) return null;
-  if (previous === 0) return current > 0 ? { up: true, label: "nouveau" } : null;
+  if (previous === 0)
+    return current > 0 ? { up: true, label: "nouveau" } : null;
   const ratio = (current - previous) / previous;
   if (Math.abs(ratio) < 0.005) return { up: true, label: "stable" };
   return {
@@ -148,7 +226,13 @@ function Kpi({
   );
 }
 
-function StatsReport({ stats }: { stats: Stats }) {
+function StatsReport({
+  stats,
+  historical = false,
+}: {
+  stats: Stats;
+  historical?: boolean;
+}) {
   const { state } = useMenuStore();
   const { totals, previousTotals: previous } = stats as Stats & {
     previousTotals: Totals;
@@ -162,6 +246,46 @@ function StatsReport({ stats }: { stats: Stats }) {
 
   return (
     <div className="pro-stack">
+      <div className="pro-btn-row">
+        <button
+          className="pro-btn line small"
+          onClick={() => {
+            const rows: (string | number)[][] = [
+              ["type", "date", "libelle", "valeur"],
+              ...stats.daily.flatMap((day) => [
+                ["jour", day.day, "visites", day.visits],
+                ["jour", day.day, "scans", day.scans],
+              ]),
+              ...stats.dishes.map((dish) => [
+                "plat",
+                "",
+                dish.name ?? "Plat supprimé",
+                dish.opens,
+              ]),
+              ...stats.tables.map((table) => [
+                "table",
+                "",
+                table.table,
+                table.scans,
+              ]),
+            ];
+            downloadFile(
+              `statistiques-${state.venue.slug}-${stats.period.start}-${stats.period.end}.csv`,
+              "\uFEFF" +
+                rows.map((row) => row.map(csvCell).join(";")).join("\r\n"),
+              "text/csv;charset=utf-8",
+            );
+          }}
+        >
+          Exporter le rapport CSV
+        </button>
+      </div>
+      {historical ? (
+        <p className="pro-hint">
+          Les visiteurs uniques ne sont pas disponibles pour une période passée.
+          Les visites et les scans restent consultables.
+        </p>
+      ) : null}
       <div className="pro-kpis two">
         <Kpi
           label="Scans du QR"
@@ -173,7 +297,7 @@ function StatsReport({ stats }: { stats: Stats }) {
             so the previous period is structurally underestimated. */}
         <Kpi
           label="Visiteurs uniques"
-          value={numberFormat.format(totals.uniqueVisitors)}
+          value={historical ? "—" : numberFormat.format(totals.uniqueVisitors)}
           current={null}
           previous={null}
         />
@@ -193,12 +317,22 @@ function StatsReport({ stats }: { stats: Stats }) {
       <DailyChart daily={stats.daily} />
       <PhotoInsight dishes={stats.dishes} categories={state.categories} />
       <TopDishes dishes={stats.dishes} items={items} />
-      <TableHeatmap tables={stats.tables} tableCount={stats.tableCount} days={stats.period.days} />
+      <TableHeatmap
+        tables={stats.tables}
+        tableCount={stats.tableCount}
+        days={stats.period.days}
+      />
       <Sources totals={totals} tables={stats.tables} />
-      <Videos dishes={stats.dishes} coverVideo={stats.coverVideo} totals={totals} />
+      <Videos
+        dishes={stats.dishes}
+        coverVideo={stats.coverVideo}
+        totals={totals}
+      />
       <p className="pro-footnote">
-        <ShieldCheck size={15} /> Aucun cookie publicitaire ni adresse IP. Vos
-        propres visites, quand vous êtes connecté, ne sont pas comptées.
+        <ShieldCheck size={15} /> Seules les visites avec statistiques
+        autorisées sont comptées. Aucun cookie publicitaire ni adresse IP
+        enregistrée par notre mesure. Vos propres visites, quand vous êtes
+        connecté, ne sont pas comptées.
       </p>
     </div>
   );
@@ -281,13 +415,16 @@ function PhotoInsight({
     if (!expectsPhoto(category)) continue;
     for (const item of category.items) {
       if (!item.available) continue;
-      (item.images.length ? groups.with : groups.without).push(opens.get(item.id) ?? 0);
+      (item.images.length ? groups.with : groups.without).push(
+        opens.get(item.id) ?? 0,
+      );
     }
   }
   const average = (values: number[]) =>
     values.reduce((sum, value) => sum + value, 0) / values.length;
   const totalOpens = [...opens.values()].reduce((sum, value) => sum + value, 0);
-  if (!groups.with.length || !groups.without.length || totalOpens < 20) return null;
+  if (!groups.with.length || !groups.without.length || totalOpens < 20)
+    return null;
   const ratio = average(groups.with) / Math.max(average(groups.without), 0.5);
   if (ratio < 1.5) return null;
   return (
@@ -299,11 +436,16 @@ function PhotoInsight({
         <h2>Les photos font ouvrir les plats</h2>
         <p>
           Sur cette période, vos plats avec photo sont ouverts{" "}
-          <b>{ratio.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}× plus</b>{" "}
+          <b>
+            {ratio.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}× plus
+          </b>{" "}
           que les autres. {groups.without.length} plat
           {groups.without.length > 1 ? "s n’ont" : " n’a"} pas encore de photo.
         </p>
-        <Link className="pro-btn dark small" href="/dashboard/menu?filtre=a-completer">
+        <Link
+          className="pro-btn dark small"
+          href="/dashboard/menu?filtre=a-completer"
+        >
           <Camera size={15} /> Ajouter des photos
         </Link>
       </div>
@@ -338,7 +480,9 @@ function TopDishes({
                 <span className="pro-rank">{index + 1}</span>
                 <span
                   className={`pro-thumb small ${image ? "" : "empty"}`}
-                  style={image ? { backgroundImage: `url(${image})` } : undefined}
+                  style={
+                    image ? { backgroundImage: `url(${image})` } : undefined
+                  }
                 >
                   {image ? null : <UtensilsCrossed size={14} />}
                 </span>
@@ -400,7 +544,9 @@ function TableHeatmap({
         <>
           <div className="pro-heatmap">
             {active.map((table) => {
-              const level = table.scans ? Math.round(15 + (table.scans / max) * 85) : 0;
+              const level = table.scans
+                ? Math.round(15 + (table.scans / max) * 85)
+                : 0;
               return (
                 <button
                   key={table.table}
@@ -408,12 +554,16 @@ function TableHeatmap({
                   className={`pro-cell ${level > 55 ? "dark" : ""} ${anyScan && !table.scans ? "zero" : ""}`}
                   style={
                     level
-                      ? { background: `color-mix(in oklab, var(--accent) ${level}%, var(--surface))` }
+                      ? {
+                          background: `color-mix(in oklab, var(--accent) ${level}%, var(--surface))`,
+                        }
                       : undefined
                   }
                   aria-pressed={selected === table.table}
                   aria-label={`Table ${table.table} : ${table.scans} scans`}
-                  onClick={() => setSelected(selected === table.table ? null : table.table)}
+                  onClick={() =>
+                    setSelected(selected === table.table ? null : table.table)
+                  }
                 >
                   <span>T{table.table}</span>
                   <b>{table.scans}</b>
@@ -447,7 +597,13 @@ function TableHeatmap({
   );
 }
 
-function Sources({ totals, tables }: { totals: Totals; tables: Stats["tables"] }) {
+function Sources({
+  totals,
+  tables,
+}: {
+  totals: Totals;
+  tables: Stats["tables"];
+}) {
   const tableScans = tables.reduce((sum, table) => sum + table.scans, 0);
   const qrScans = Math.max(0, totals.scans - tableScans);
   const direct = Math.max(0, totals.visits - totals.scans);
@@ -499,7 +655,14 @@ function Videos({
 }) {
   const rows = [
     ...(coverVideo
-      ? [{ key: "cover", name: "Vidéo de couverture", plays: coverVideo.plays, completions: coverVideo.completions }]
+      ? [
+          {
+            key: "cover",
+            name: "Vidéo de couverture",
+            plays: coverVideo.plays,
+            completions: coverVideo.completions,
+          },
+        ]
       : []),
     ...dishes
       .filter((dish) => dish.videoPlays > 0)
@@ -543,7 +706,9 @@ function Videos({
                 <td>{row.name}</td>
                 <td>{numberFormat.format(row.plays)}</td>
                 <td>
-                  {formatRate(row.plays ? Math.min(1, row.completions / row.plays) : null)}
+                  {formatRate(
+                    row.plays ? Math.min(1, row.completions / row.plays) : null,
+                  )}
                 </td>
               </tr>
             ))}

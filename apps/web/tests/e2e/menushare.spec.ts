@@ -102,7 +102,9 @@ test("accueil, connexion sans mot de passe et redirection inscription", async ({
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(
     page.getByRole("button", { name: "Continuer avec Google" }),
-  ).toHaveCount(process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" ? 1 : 0);
+  ).toHaveCount(
+    process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" ? 1 : 0,
+  );
   await expect(
     page.getByRole("button", { name: "Continuer avec Apple" }),
   ).toHaveCount(process.env.NEXT_PUBLIC_APPLE_OAUTH_ENABLED === "true" ? 1 : 0);
@@ -194,7 +196,7 @@ test("onboarding puis création complète d’un plat publié", async ({ page })
     page.getByRole("button", { name: "Modifier Œufs bénédicte" }),
   ).toBeVisible();
 
-  await expect(publishBar(page)).toContainText("pas encore en ligne");
+  await expect(publishBar(page)).toContainText("hors ligne");
   await publish(page);
   await expect(page.getByText(/En ligne · v1/).first()).toBeVisible();
 
@@ -220,7 +222,9 @@ test("onboarding puis création complète d’un plat publié", async ({ page })
   await expect(sheet).toContainText("Des œufs fermiers pochés minute");
   await expect(sheet).toContainText("Végétarien");
   for (const allergen of ["Gluten", "Œufs", "Lait"])
-    await expect(sheet.getByRole("listitem").filter({ hasText: allergen })).toBeVisible();
+    await expect(
+      sheet.getByRole("listitem").filter({ hasText: allergen }),
+    ).toBeVisible();
   await expect(sheet).toContainText("Œufs fermiers · Brioche toastée");
   await expect(sheet).toContainText("Mimosa à l’orange fraîche");
   await expect(sheet).toContainText("4,9/5");
@@ -230,6 +234,7 @@ test("onboarding puis création complète d’un plat publié", async ({ page })
   await sheet
     .getByRole("button", { name: "Lire la vidéo de Œufs bénédicte" })
     .click();
+  await sheet.getByRole("button", { name: "Lire cette vidéo" }).click();
   await expect(sheet.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /youtube-nocookie\.com\/embed/,
@@ -261,8 +266,12 @@ test("carte : ordre, rupture en direct, prix publié et suppression", async ({
   await editor.getByLabel("Prix (€)").fill("15");
   await editor.getByRole("button", { name: "Enregistrer" }).click();
   await expect(publishBar(page)).toContainText("2 modifications");
-  await publishBar(page).getByRole("button", { name: /modifications en attente/ }).click();
-  const review = page.getByRole("dialog", { name: "2 modifications en attente" });
+  await publishBar(page)
+    .getByRole("button", { name: /modifications en attente/ })
+    .click();
+  const review = page.getByRole("dialog", {
+    name: "2 modifications en attente",
+  });
   await expect(review).toContainText("Ordre des catégories");
   await expect(review).toContainText(/Prix 14\s€ → 15\s€/);
 
@@ -316,7 +325,9 @@ test("service : disponibilité et suggestion du jour en direct", async ({
   await expect(
     page.getByRole("heading", { name: "Bonjour, Nonna Lydie" }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Disponibilité ce midi" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Disponibilité ce midi" }),
+  ).toBeVisible();
 
   await page
     .getByRole("switch", { name: "Disponibilité de Arancini al Ragù" })
@@ -331,8 +342,12 @@ test("service : disponibilité et suggestion du jour en direct", async ({
   await special.getByLabel("Prix (€)").fill("18");
   await special.getByLabel("Description").fill("Pesto de basilic, pignons.");
   await special.getByLabel("Retirer de la carte à").fill("22:30");
-  await special.getByRole("button", { name: "Mettre en ligne maintenant" }).click();
-  await expect(page.getByText("Gnocchi al pesto", { exact: true })).toBeVisible();
+  await special
+    .getByRole("button", { name: "Mettre en ligne maintenant" })
+    .click();
+  await expect(
+    page.getByText("Gnocchi al pesto", { exact: true }),
+  ).toBeVisible();
   await expect(publishBar(page)).toHaveCount(0);
 
   await page.goto("/menu/nonna-lydie");
@@ -340,16 +355,22 @@ test("service : disponibilité et suggestion du jour en direct", async ({
   await expect(suggestion).toContainText("Gnocchi al pesto");
   await expect(suggestion).toContainText(/18\s€/);
   await expect(
-    page.locator(".pm-category").getByRole("button", { name: "Voir Tagliatelle al Tartufo" }),
+    page
+      .locator(".pm-category")
+      .getByRole("button", { name: "Voir Tagliatelle al Tartufo" }),
   ).toContainText("Épuisé");
   await expect(
-    page.locator(".pm-category").getByRole("button", { name: "Voir Arancini al Ragù" }),
+    page
+      .locator(".pm-category")
+      .getByRole("button", { name: "Voir Arancini al Ragù" }),
   ).not.toContainText("Épuisé");
 
   await page.goto("/dashboard");
   await page.getByRole("button", { name: "Retirer", exact: true }).click();
   await page.goto("/menu/nonna-lydie");
-  await expect(page.getByRole("region", { name: "Suggestion du jour" })).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Suggestion du jour" }),
+  ).toHaveCount(0);
 });
 
 test("apparence, logo, couverture et lecteur vidéo Vimeo", async ({ page }) => {
@@ -373,15 +394,21 @@ test("apparence, logo, couverture et lecteur vidéo Vimeo", async ({ page }) => 
     .getByLabel("URL de la vidéo de couverture")
     .fill("https://vimeo.com/76979871");
   await page.getByRole("button", { name: "Enregistrer" }).click();
-  await expect(page.getByText("Vidéo enregistrée · à publier").first()).toBeVisible();
-  await publishBar(page).getByRole("button", { name: /en attente/ }).click();
+  await expect(
+    page.getByText("Vidéo enregistrée · à publier").first(),
+  ).toBeVisible();
+  await publishBar(page)
+    .getByRole("button", { name: /en attente/ })
+    .click();
   await expect(page.getByRole("dialog")).toContainText(
     "Couleur, logo, couverture, vidéo de couverture",
   );
   await page.getByRole("button", { name: "Publier la version 2" }).click();
 
   await page.goto("/menu/nonna-lydie");
-  await expect(page.getByRole("img", { name: "Logo Nonna Lydie" })).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Logo Nonna Lydie" }),
+  ).toBeVisible();
   await expect(page.locator("main.public-menu")).toHaveCSS(
     "--accent",
     "#125c4a",
@@ -389,6 +416,7 @@ test("apparence, logo, couverture et lecteur vidéo Vimeo", async ({ page }) => 
   await page
     .getByRole("button", { name: "Lire la vidéo de couverture" })
     .click();
+  await page.getByRole("button", { name: "Lire cette vidéo" }).click();
   await expect(page.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /player\.vimeo\.com\/video\/76979871/,
@@ -419,7 +447,9 @@ test("informations et horaires restent en brouillon jusqu’à la publication", 
   ).toHaveCount(0);
 
   await page.goto("/dashboard/settings");
-  await publishBar(page).getByRole("button", { name: /en attente/ }).click();
+  await publishBar(page)
+    .getByRole("button", { name: /en attente/ })
+    .click();
   await expect(page.getByRole("dialog")).toContainText(
     "Nom, accroche, horaires d’ouverture",
   );
@@ -446,7 +476,9 @@ test("menu public mobile : table, filtres, recherche, sélection et serveur", as
   await page.clock.setFixedTime(THURSDAY_LUNCH);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/menu/nonna-lydie?t=12");
-  await expect(page.getByRole("heading", { name: "Nonna Lydie" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Nonna Lydie" }),
+  ).toBeVisible();
   await expect(page.getByText("Table 12")).toBeVisible();
   await expect(page.getByText("Ouvert · jusqu’à 14h30")).toBeVisible();
   await expect(page.getByRole("link", { name: "Itinéraire" })).toHaveCount(0);
@@ -467,7 +499,9 @@ test("menu public mobile : table, filtres, recherche, sélection et serveur", as
     .getByRole("navigation", { name: "Catégories du menu" })
     .getByRole("button", { name: "Dolci" })
     .click();
-  await expect(page.getByRole("heading", { name: "Dolci", level: 2 })).toBeInViewport();
+  await expect(
+    page.getByRole("heading", { name: "Dolci", level: 2 }),
+  ).toBeInViewport();
   await expect(
     page.getByRole("navigation", { name: "Catégories du menu" }),
   ).toBeInViewport();
@@ -477,18 +511,27 @@ test("menu public mobile : table, filtres, recherche, sélection et serveur", as
   const allergies = page.getByRole("dialog", { name: "Allergies et régimes" });
   await allergies.getByRole("button", { name: "Lait" }).click();
   await allergies.getByRole("button", { name: "Voir 5 plats" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "masqués" })).toContainText(
-    "sans lait",
-  );
-  await expect(page.locator(".pm-category").getByText("Burrata Pugliese")).toHaveCount(0);
-  await expect(page.locator(".pm-category").getByText("Vitello Tonnato")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "masqués" }),
+  ).toContainText("sans lait");
+  await expect(
+    page.locator(".pm-category").getByText("Burrata Pugliese"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".pm-category").getByText("Vitello Tonnato"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Tout voir" }).click();
-  await expect(page.locator(".pm-category").getByText("Burrata Pugliese")).toBeVisible();
+  await expect(
+    page.locator(".pm-category").getByText("Burrata Pugliese"),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Rechercher un plat" }).click();
   await page.getByRole("searchbox").fill("truffe");
   await expect(page.getByRole("dialog")).toContainText("1 résultat");
-  await page.getByRole("dialog").getByRole("button", { name: "Voir Tagliatelle al Tartufo" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Voir Tagliatelle al Tartufo" })
+    .click();
   const dish = page.getByRole("dialog", { name: "Tagliatelle al Tartufo" });
   await expect(dish).toContainText("Contient lait, que vous évitez.");
   await dish.getByRole("button", { name: "Augmenter la quantité" }).click();
@@ -498,18 +541,24 @@ test("menu public mobile : table, filtres, recherche, sélection et serveur", as
     .locator(".pm-category")
     .getByRole("button", { name: "Ajouter Burrata Pugliese à ma sélection" })
     .click();
-  const pill = page.getByRole("button", { name: /Ouvrir ma sélection : 3 articles/ });
+  const pill = page.getByRole("button", {
+    name: /Ouvrir ma sélection : 3 articles/,
+  });
   await expect(pill).toContainText(/62\s€/);
   await pill.click();
   await page.getByRole("button", { name: "Montrer au serveur" }).click();
-  const waiter = page.getByRole("dialog", { name: "Sélection pour le serveur" });
+  const waiter = page.getByRole("dialog", {
+    name: "Sélection pour le serveur",
+  });
   await expect(waiter).toContainText("Table 12");
   await expect(waiter).toContainText("2×Tagliatelle al Tartufo");
   await expect(waiter).toContainText("1×Burrata Pugliese");
 
   // The memo survives a reload.
   await page.reload();
-  await expect(page.getByRole("button", { name: /Ouvrir ma sélection : 3 articles/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Ouvrir ma sélection : 3 articles/ }),
+  ).toBeVisible();
 
   await page.goto("/ce-menu-nexiste-pas");
   await expect(
@@ -568,10 +617,9 @@ test("navigation mobile du tableau de bord et onglet Établissement", async ({
 
   await tabs.getByRole("link", { name: "Établissement" }).click();
   await expect(page).toHaveURL(/\/dashboard\/venue$/);
-  await expect(tabs.getByRole("link", { name: "Établissement" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(
+    tabs.getByRole("link", { name: "Établissement" }),
+  ).toHaveAttribute("aria-current", "page");
   await page.getByRole("link", { name: /^Apparence/ }).click();
   await expect(page).toHaveURL(/\/dashboard\/appearance$/);
   await page.getByRole("link", { name: "Établissement" }).first().click();
@@ -589,6 +637,9 @@ test("navigation mobile du tableau de bord et onglet Établissement", async ({
     "/dashboard/appearance",
     "/dashboard/settings",
     "/dashboard/establishments/new",
+    "/dashboard/history",
+    "/dashboard/tools",
+    "/dashboard/account",
   ]) {
     await page.goto(route);
     await expect(page.locator(".pro-page-head h1")).toBeVisible();
@@ -627,7 +678,9 @@ test("plusieurs établissements et ancienne URL publique", async ({ page }) => {
   await expect(venues.getByRole("listitem")).toHaveCount(2);
   await venues.getByRole("button", { name: /Nonna Lydie/ }).click();
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: /Nonna Lydie/, level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Nonna Lydie/, level: 1 }),
+  ).toBeVisible();
 });
 
 test("QR codes par table et statistiques en mode démo", async ({ page }) => {
@@ -645,7 +698,9 @@ test("QR codes par table et statistiques en mode démo", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Statistiques", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText("Aucune statistique en mode démo.")).toBeVisible();
+  await expect(
+    page.getByText("Aucune statistique en mode démo."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "30 jours" }).click();
   await expect(page.getByRole("button", { name: "30 jours" })).toHaveAttribute(
     "aria-pressed",
@@ -661,9 +716,14 @@ test("carte : réorganiser un plat au glisser-déposer", async ({ page }) => {
   await expect(rows).toHaveCount(4);
 
   const grip = antipasti.locator('[data-row-id="burrata"] .pro-grip');
-  const target = await antipasti.locator('[data-row-id="vitello"]').boundingBox();
+  const target = await antipasti
+    .locator('[data-row-id="vitello"]')
+    .boundingBox();
   const start = await grip.boundingBox();
-  await page.mouse.move(start!.x + start!.width / 2, start!.y + start!.height / 2);
+  await page.mouse.move(
+    start!.x + start!.width / 2,
+    start!.y + start!.height / 2,
+  );
   await page.mouse.down();
   await page.mouse.move(
     start!.x + start!.width / 2,
@@ -692,12 +752,16 @@ test("les feuilles gardent le focus et le rendent à la fermeture", async ({
   for (let index = 0; index < 12; index++) {
     await page.keyboard.press("Tab");
     expect(
-      await dialog.evaluate((element) => element.contains(document.activeElement)),
+      await dialog.evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
     ).toBe(true);
   }
   await page.keyboard.press("Shift+Tab");
   expect(
-    await dialog.evaluate((element) => element.contains(document.activeElement)),
+    await dialog.evaluate((element) =>
+      element.contains(document.activeElement),
+    ),
   ).toBe(true);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
@@ -726,13 +790,17 @@ test("un plat épuisé après l’ajout sort du total et de la vue serveur", asy
     .click();
 
   await page.goto("/menu/nonna-lydie");
-  const pill = page.getByRole("button", { name: /Ouvrir ma sélection : 1 article, 9/ });
+  const pill = page.getByRole("button", {
+    name: /Ouvrir ma sélection : 1 article, 9/,
+  });
   await pill.click();
   const selection = page.getByRole("dialog", { name: "Ma sélection" });
   await expect(selection).toContainText("Épuisé entre-temps · non compté");
   await expect(selection).toContainText(/Total estimé9\s€/);
   await selection.getByRole("button", { name: "Montrer au serveur" }).click();
-  const waiter = page.getByRole("dialog", { name: "Sélection pour le serveur" });
+  const waiter = page.getByRole("dialog", {
+    name: "Sélection pour le serveur",
+  });
   await expect(waiter).toContainText("Table 4");
   await expect(waiter).toContainText("1×Tiramisù della Casa");
   await expect(waiter).not.toContainText("Burrata");

@@ -22,6 +22,7 @@ import {
   visitorIdFrom,
 } from "@/lib/menu-analytics";
 import type { ExternalVideo } from "@/lib/menu-domain";
+import { usePrivacyPreference } from "@/lib/privacy-preferences";
 
 type TrackEvent = FunctionArgs<typeof api.analytics.track>["event"];
 
@@ -47,15 +48,15 @@ export function useMenuTracker() {
 
 const HEARTBEAT_MS = 30_000;
 
-function readVisitorId() {
+function readVisitorId(venueId: string) {
+  const key = `${VISITOR_STORAGE_KEY}.${venueId}`;
   try {
     const visitor = visitorIdFrom(
-      localStorage.getItem(VISITOR_STORAGE_KEY),
+      localStorage.getItem(key),
       Date.now(),
       randomId,
     );
-    if (visitor.stored)
-      localStorage.setItem(VISITOR_STORAGE_KEY, visitor.stored);
+    if (visitor.stored) localStorage.setItem(key, visitor.stored);
     return visitor.id;
   } catch {
     // Private browsing can block storage: the visit is still counted once.
@@ -64,7 +65,15 @@ function readVisitorId() {
 }
 
 /** Anonymous audience measurement of a published menu (no cookie, no IP). */
-export function MenuTrackerProvider({
+export function MenuTrackerProvider(props: {
+  venueId: string;
+  children: ReactNode;
+}) {
+  const allowed = usePrivacyPreference("analytics");
+  return allowed ? <ActiveMenuTrackerProvider {...props} /> : props.children;
+}
+
+function ActiveMenuTrackerProvider({
   venueId,
   children,
 }: {
@@ -112,7 +121,7 @@ export function MenuTrackerProvider({
       send({
         type: "start",
         venueId,
-        visitorId: readVisitorId(),
+        visitorId: readVisitorId(venueId),
         source: visit.source,
         table: visit.table,
       });

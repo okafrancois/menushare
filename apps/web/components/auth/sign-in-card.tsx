@@ -2,6 +2,7 @@
 
 import { ArrowLeft, ArrowRight, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
@@ -256,8 +257,9 @@ export function SignInCard() {
       )}
 
       <p className="form-note">
-        En continuant, vous acceptez les conditions d’utilisation et la
-        politique de confidentialité de MenuShare.
+        En continuant, vous acceptez les{" "}
+        <Link href="/terms">conditions d’utilisation</Link> et la
+        <Link href="/privacy"> politique de confidentialité</Link> de MenuShare.
       </p>
     </div>
   );

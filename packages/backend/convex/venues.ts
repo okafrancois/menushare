@@ -6,10 +6,15 @@ import type { MutationCtx } from "./_generated/server";
 import { currentUserOrThrow, ownedVenueOrThrow } from "./lib/auth";
 import { MAX_TABLES } from "./lib/analytics";
 import { normalizeOpeningHours } from "./lib/menu";
-import { assertFreshUpload } from "./lib/storage";
+import {
+  assertFreshUpload,
+  deleteFileIfPresent,
+  storageIdsIn,
+} from "./lib/storage";
+import { internal } from "./_generated/api";
 import { normalizeExternalVideoUrl } from "./lib/video";
 import { openingHours as openingHoursValidator } from "./schema";
-import { mutation, query } from "./server";
+import { internalMutation, mutation, query } from "./server";
 
 const RESERVED_SLUGS = new Set([
   "api",
@@ -20,6 +25,10 @@ const RESERVED_SLUGS = new Set([
   "sign-in",
   "sign-up",
   "terms",
+  "onboarding",
+  "preview",
+  "help",
+  "support",
 ]);
 
 function slugify(value: string) {
@@ -61,6 +70,7 @@ export const listMine = query({
     const venues = await ctx.db
       .query("venues")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.neq(q.field("deleting"), true))
       .order("desc")
       .take(20);
     return await Promise.all(
@@ -84,6 +94,7 @@ export const listMinePaginated = query({
     const result = await ctx.db
       .query("venues")
       .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .filter((q) => q.neq(q.field("deleting"), true))
       .order("desc")
       .paginate(paginationOpts);
     return {
@@ -132,6 +143,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const user = await currentUserOrThrow(ctx);
     const slug = slugify(args.requestedSlug ?? args.name);
+    if (!args.name.trim()) throw new Error("INVALID_NAME");
     assertSlug(slug);
 
     const existing = await ctx.db
@@ -165,6 +177,18 @@ export const create = mutation({
     });
 
     return { venueId, menuId, slug };
+  },
+});
+
+/** Taking a menu offline keeps its draft, files and publication history. */
+export const setStatus = mutation({
+  args: {
+    venueId: v.id("venues"),
+    status: v.union(v.literal("draft"), v.literal("archived")),
+  },
+  handler: async (ctx, { venueId, status }) => {
+    await ownedVenueOrThrow(ctx, venueId);
+    await ctx.db.patch(venueId, { status });
   },
 });
 
@@ -242,6 +266,23 @@ export const updateAppearance = mutation({
       patch.coverVideoExternalId = video.externalId;
       patch.coverVideoEmbedUrl = video.embedUrl;
     }
+    const nextLogo =
+      "logoStorageId" in patch ? patch.logoStorageId : venue.logoStorageId;
+    const nextCover =
+      "coverImageStorageId" in patch
+        ? patch.coverImageStorageId
+        : venue.coverImageStorageId;
+    for (const oldFile of new Set([
+      venue.logoStorageId,
+      venue.coverImageStorageId,
+    ])) {
+      if (oldFile && oldFile !== nextLogo && oldFile !== nextCover) {
+        await ctx.db.insert("pendingFileDeletions", {
+          venueId: venue._id,
+          storageId: oldFile,
+        });
+      }
+    }
     await ctx.db.patch(args.venueId, patch);
     await touchVenueMenu(ctx, args.venueId);
   },
@@ -308,5 +349,135 @@ export const changeSlug = mutation({
     await ctx.db.patch(venueId, { slug: nextSlug });
     await touchVenueMenu(ctx, venueId);
     return nextSlug;
+  },
+});
+
+export const remove = mutation({
+  args: { venueId: v.id("venues"), confirmName: v.string() },
+  handler: async (ctx, { venueId, confirmName }) => {
+    const { venue } = await ownedVenueOrThrow(ctx, venueId);
+    if (confirmName !== venue.name) throw new Error("CONFIRM_NAME");
+    await ctx.db.patch(venueId, { deleting: true, status: "archived" });
+    await ctx.scheduler.runAfter(0, internal.venues.purgeVenue, { venueId });
+  },
+});
+
+/** Called by the auth deletion hook; public URLs are withdrawn before deleting the identity. */
+export const removeAccountData = internalMutation({
+  args: { ownerId: v.string() },
+  handler: async (ctx, { ownerId }) => {
+    const venues = await ctx.db
+      .query("venues")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
+      .filter((q) => q.neq(q.field("deleting"), true))
+      .take(100);
+    for (const venue of venues) {
+      await ctx.db.patch(venue._id, { deleting: true, status: "archived" });
+      await ctx.scheduler.runAfter(0, internal.venues.purgeVenue, {
+        venueId: venue._id,
+      });
+    }
+    if (venues.length === 100)
+      await ctx.scheduler.runAfter(0, internal.venues.removeAccountData, {
+        ownerId,
+      });
+  },
+});
+
+/** Deletes in small transactions so media-heavy accounts can leave reliably. */
+export const purgeVenue = internalMutation({
+  args: { venueId: v.id("venues") },
+  handler: async (ctx, { venueId }) => {
+    const venue = await ctx.db.get(venueId);
+    if (!venue?.deleting) return;
+    const again = () =>
+      ctx.scheduler.runAfter(0, internal.venues.purgeVenue, { venueId });
+    const media = await ctx.db
+      .query("media")
+      .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+      .take(100);
+    if (media.length) {
+      for (const asset of media) {
+        if (asset.imageStorageId)
+          await deleteFileIfPresent(ctx, asset.imageStorageId);
+        await ctx.db.delete(asset._id);
+      }
+      await again();
+      return;
+    }
+    const menu = await ctx.db
+      .query("menus")
+      .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+      .first();
+    if (menu) {
+      const category = await ctx.db
+        .query("categories")
+        .withIndex("by_menu_order", (q) => q.eq("menuId", menu._id))
+        .first();
+      if (category) {
+        const items = await ctx.db
+          .query("menuItems")
+          .withIndex("by_category_order", (q) =>
+            q.eq("categoryId", category._id),
+          )
+          .take(100);
+        for (const item of items) await ctx.db.delete(item._id);
+        if (!items.length) await ctx.db.delete(category._id);
+      } else await ctx.db.delete(menu._id);
+      await again();
+      return;
+    }
+    const snapshot = await ctx.db
+      .query("menuSnapshots")
+      .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+      .first();
+    if (snapshot) {
+      for (const id of storageIdsIn(snapshot.data))
+        await deleteFileIfPresent(ctx, id as Id<"_storage">);
+      await ctx.db.delete(snapshot._id);
+      await again();
+      return;
+    }
+    for (const table of [
+      "slugHistory",
+      "soldOutItems",
+      "dailySpecials",
+      "pendingFileDeletions",
+      "analyticsSessions",
+    ] as const) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+        .take(100);
+      for (const row of rows) {
+        if ("imageStorageId" in row && row.imageStorageId)
+          await deleteFileIfPresent(ctx, row.imageStorageId);
+        if ("storageId" in row) await deleteFileIfPresent(ctx, row.storageId);
+        await ctx.db.delete(row._id);
+      }
+      if (rows.length) {
+        await again();
+        return;
+      }
+    }
+    const visitors = await ctx.db
+      .query("analyticsVisitors")
+      .withIndex("by_venue_and_visitor", (q) => q.eq("venueId", venueId))
+      .take(100);
+    for (const row of visitors) await ctx.db.delete(row._id);
+    const daily = await ctx.db
+      .query("analyticsDaily")
+      .withIndex("by_venue_and_scope_and_day", (q) => q.eq("venueId", venueId))
+      .take(100);
+    for (const row of daily) await ctx.db.delete(row._id);
+    if (visitors.length || daily.length) {
+      await again();
+      return;
+    }
+    if (venue.logoStorageId)
+      await deleteFileIfPresent(ctx, venue.logoStorageId);
+    if (venue.coverImageStorageId)
+      await deleteFileIfPresent(ctx, venue.coverImageStorageId);
+    await ctx.db.delete(venueId);
   },
 });
