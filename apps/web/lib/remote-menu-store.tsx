@@ -12,21 +12,20 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import {
   createEmptyState,
-  move,
-  type ExternalVideo,
-  type MenuCategory,
-  type MenuImage,
-  type MenuItem,
+  emptyLiveService,
+  videoToUrl,
+  type LiveService,
   type MenuState,
-  type Venue,
 } from "@/lib/menu-domain";
+import {
+  toCategories,
+  toDailySpecial,
+  toMenuSnapshot,
+  toVenue,
+} from "@/lib/menu-snapshot";
 import { MenuStoreContext, type MenuStore } from "@/lib/menu-store";
 
-function videoUrl(video: ExternalVideo) {
-  return video.provider === "youtube"
-    ? `https://youtu.be/${video.externalId}`
-    : `https://vimeo.com/${video.externalId}`;
-}
+const SELECTED_VENUE_KEY = "menushare.selectedVenue.v1";
 
 function hasOwn<T extends object>(value: T, key: PropertyKey) {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -47,17 +46,26 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const workspace =
     venues.find(({ venue }) => venue._id === selectedVenueId) ?? venues[0];
   const menuId = workspace?.menuId;
+  const venueId = workspace?.venue._id;
   const draft = useQuery(api.menus.getDraft, menuId ? { menuId } : "skip");
+  const publishedPayload = useQuery(
+    api.menus.getPublishedSnapshot,
+    menuId ? { menuId } : "skip",
+  );
+  const service = useQuery(
+    api.service.getServiceState,
+    venueId ? { venueId } : "skip",
+  );
 
   useEffect(() => {
-    const stored = localStorage.getItem("menushare.selectedVenue.v1");
+    const stored = localStorage.getItem(SELECTED_VENUE_KEY);
     if (stored) setSelectedVenueId(stored);
   }, []);
 
   useEffect(() => {
     if (!workspace || workspace.venue._id === selectedVenueId) return;
     setSelectedVenueId(workspace.venue._id);
-    localStorage.setItem("menushare.selectedVenue.v1", workspace.venue._id);
+    localStorage.setItem(SELECTED_VENUE_KEY, workspace.venue._id);
   }, [selectedVenueId, workspace]);
 
   const createVenueMutation = useMutation(api.venues.create);
@@ -69,116 +77,81 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
   const addCategoryMutation = useMutation(api.menus.addCategory);
   const updateCategoryMutation = useMutation(api.menus.updateCategory);
   const deleteCategoryMutation = useMutation(api.menus.deleteCategory);
-  const reorderCategories = useMutation(api.menus.reorderCategories);
+  const reorderCategoriesMutation = useMutation(api.menus.reorderCategories);
   const addItemMutation = useMutation(api.menus.addItem);
   const updateItemMutation = useMutation(api.menus.updateItem);
   const deleteItemMutation = useMutation(api.menus.deleteItem);
-  const reorderItems = useMutation(api.menus.reorderItems);
+  const reorderItemsMutation = useMutation(api.menus.reorderItems);
   const setExternalVideo = useMutation(api.menus.setExternalVideo);
   const removeExternalVideo = useMutation(api.menus.removeExternalVideo);
   const addItemImageMutation = useMutation(api.menus.addItemImage);
   const removeMedia = useMutation(api.menus.removeMedia);
   const publishMutation = useMutation(api.menus.publish);
+  const setSoldOutMutation = useMutation(api.service.setSoldOut);
+  const setAutoRestockMutation = useMutation(api.service.setAutoRestock);
+  const setDailySpecialMutation = useMutation(api.service.setDailySpecial);
+  const clearDailySpecialMutation = useMutation(api.service.clearDailySpecial);
+
+  const live = useMemo<LiveService>(() => {
+    if (!service) return emptyLiveService();
+    return {
+      soldOutIds: service.soldOutItemIds.map(String),
+      autoRestock: service.autoRestock,
+      special: toDailySpecial(service.special),
+    };
+  }, [service]);
 
   const state = useMemo<MenuState>(() => {
     if (!draft) return createEmptyState();
-
-    const venue: Venue = {
-      id: draft.venue._id,
-      slug: draft.venue.slug,
-      name: draft.venue.name,
-      kind: draft.venue.kind,
-      city: draft.venue.city ?? "",
-      tagline: draft.venue.tagline ?? "",
-      description: draft.venue.description ?? "",
-      address: draft.venue.address ?? "",
-      phone: draft.venue.phone ?? "",
-      hours: draft.venue.hours ?? "",
-      accentColor: draft.venue.accentColor ?? "#76263c",
-      logoDataUrl: draft.venue.logoUrl ?? undefined,
-      coverImageDataUrl: draft.venue.coverImageUrl ?? undefined,
-      coverVideo:
-        draft.venue.coverVideoProvider &&
-        draft.venue.coverVideoExternalId &&
-        draft.venue.coverVideoEmbedUrl
-          ? {
-              provider: draft.venue.coverVideoProvider,
-              externalId: draft.venue.coverVideoExternalId,
-              embedUrl: draft.venue.coverVideoEmbedUrl,
-            }
-          : undefined,
-      tableCount: draft.venue.tableCount,
-    };
-
-    const categories: MenuCategory[] = draft.categories.map((category) => ({
-      id: category._id,
-      name: category.name,
-      eyebrow: category.eyebrow ?? "",
-      items: category.items.map((item) => {
-        const video = item.media.find(
-          (asset) =>
-            asset.kind === "externalVideo" &&
-            asset.provider &&
-            asset.externalId &&
-            asset.embedUrl,
-        );
-        return {
-          id: item._id,
-          name: item.name,
-          description: item.description ?? "",
-          details: item.details ?? "",
-          priceCents: item.priceCents,
-          available: item.active,
-          images: item.media
-            .filter((asset) => asset.kind === "image" && asset.imageUrl)
-            .map((asset) => ({
-              id: asset._id,
-              dataUrl: asset.imageUrl!,
-              alt: asset.alt ?? item.name,
-            })),
-          video:
-            video?.provider && video.externalId && video.embedUrl
-              ? {
-                  provider: video.provider,
-                  externalId: video.externalId,
-                  embedUrl: video.embedUrl,
-                }
-              : undefined,
-          ingredients: item.ingredients ?? [],
-          pairingName: item.pairingName ?? "",
-          pairingPriceCents: item.pairingPriceCents,
-          reviewRating: item.reviewRating,
-          reviewCount: item.reviewCount,
-          reviewQuote: item.reviewQuote ?? "",
-          reviewAuthor: item.reviewAuthor ?? "",
-        } satisfies MenuItem;
-      }),
-    }));
-
+    const venue = toVenue(draft.venue);
+    const categories = toCategories(draft.categories);
+    const snapshot = toMenuSnapshot(publishedPayload);
     const publishedAt = draft.menu.publishedAt;
     return {
       venue,
       categories,
       changedAt: draft.menu.updatedAt,
-      published: publishedAt
-        ? {
-            venue,
-            categories,
-            publishedAt,
-            version: draft.menu.version,
-          }
-        : undefined,
+      published:
+        snapshot && publishedAt
+          ? { ...snapshot, publishedAt, version: draft.menu.version }
+          : undefined,
+      live,
     };
-  }, [draft]);
+  }, [draft, live, publishedPayload]);
 
   const hydrated =
     !auth.isLoading &&
     (!auth.isAuthenticated ||
       (venuesStatus !== "LoadingFirstPage" &&
-        (!menuId || draft !== undefined)));
+        (!menuId ||
+          (draft !== undefined &&
+            publishedPayload !== undefined &&
+            service !== undefined))));
 
-  const store = useMemo<MenuStore>(
-    () => ({
+  const store = useMemo<MenuStore>(() => {
+    const currentVenueId = () => {
+      const id = state.venue.id as Id<"venues">;
+      if (!id) throw new Error("VENUE_NOT_FOUND");
+      return id;
+    };
+
+    async function uploadImage(dataUrl: string) {
+      const uploadUrl = await generateImageUploadUrl({
+        venueId: currentVenueId(),
+      });
+      const blob = await (await fetch(dataUrl)).blob();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": blob.type || "application/octet-stream" },
+        body: blob,
+      });
+      if (!response.ok) throw new Error("IMAGE_UPLOAD_FAILED");
+      const result = (await response.json()) as { storageId?: string };
+      if (!result.storageId) throw new Error("IMAGE_UPLOAD_FAILED");
+      return result.storageId as Id<"_storage">;
+    }
+
+    return {
       state,
       hydrated,
       remote: true,
@@ -190,9 +163,9 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
         city: venue.city ?? "",
       })),
       selectedVenueId: workspace?.venue._id ?? "",
-      selectVenue(venueId) {
-        setSelectedVenueId(venueId);
-        localStorage.setItem("menushare.selectedVenue.v1", venueId);
+      selectVenue(nextVenueId) {
+        setSelectedVenueId(nextVenueId);
+        localStorage.setItem(SELECTED_VENUE_KEY, nextVenueId);
       },
       canLoadMoreVenues: venuesStatus === "CanLoadMore",
       loadMoreVenues() {
@@ -206,90 +179,69 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           city: input.city || undefined,
         });
         setSelectedVenueId(created.venueId);
-        localStorage.setItem("menushare.selectedVenue.v1", created.venueId);
+        localStorage.setItem(SELECTED_VENUE_KEY, created.venueId);
       },
       async updateVenue(patch) {
-        const venueId = state.venue.id as Id<"venues">;
-        if (!venueId) throw new Error("VENUE_NOT_FOUND");
-
+        const id = currentVenueId();
         if (patch.slug && patch.slug !== state.venue.slug) {
-          await changeSlug({ venueId, requestedSlug: patch.slug });
+          await changeSlug({ venueId: id, requestedSlug: patch.slug });
         }
-
-        await updateProfile({
-          venueId,
-          name: patch.name,
-          kind: patch.kind,
-          city: patch.city,
-          tagline: patch.tagline,
-          description: patch.description,
-          phone: patch.phone,
-          address: patch.address,
-          hours: patch.hours,
-        });
-
-        const appearance: {
-          venueId: Id<"venues">;
-          accentColor?: string;
-          logoStorageId?: Id<"_storage">;
-          coverImageStorageId?: Id<"_storage">;
-          coverVideoUrl?: string;
-          removeLogo?: boolean;
-          removeCoverImage?: boolean;
-          removeCoverVideo?: boolean;
-        } = { venueId };
-
-        if (patch.accentColor !== undefined) {
-          appearance.accentColor = patch.accentColor;
-        }
-
-        async function uploadImage(dataUrl: string) {
-          const uploadUrl = await generateImageUploadUrl({ venueId });
-          const blob = await (await fetch(dataUrl)).blob();
-          const response = await fetch(uploadUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": blob.type || "application/octet-stream",
-            },
-            body: blob,
+        const profileKeys = [
+          "name",
+          "kind",
+          "city",
+          "tagline",
+          "description",
+          "phone",
+          "address",
+          "hours",
+          "openingHours",
+        ] as const;
+        if (profileKeys.some((key) => hasOwn(patch, key))) {
+          await updateProfile({
+            venueId: id,
+            name: patch.name,
+            kind: patch.kind,
+            city: patch.city,
+            tagline: patch.tagline,
+            description: patch.description,
+            phone: patch.phone,
+            address: patch.address,
+            hours: patch.hours,
+            openingHours: patch.openingHours,
           });
-          if (!response.ok) throw new Error("IMAGE_UPLOAD_FAILED");
-          const result = (await response.json()) as { storageId?: string };
-          if (!result.storageId) throw new Error("IMAGE_UPLOAD_FAILED");
-          return result.storageId as Id<"_storage">;
         }
 
+        const appearance: Parameters<typeof updateAppearance>[0] = {
+          venueId: id,
+        };
+        if (patch.accentColor !== undefined)
+          appearance.accentColor = patch.accentColor;
         if (
           hasOwn(patch, "logoDataUrl") &&
           patch.logoDataUrl !== state.venue.logoDataUrl
         ) {
-          if (patch.logoDataUrl) {
+          if (patch.logoDataUrl)
             appearance.logoStorageId = await uploadImage(patch.logoDataUrl);
-          } else {
-            appearance.removeLogo = true;
-          }
+          else appearance.removeLogo = true;
         }
         if (
           hasOwn(patch, "coverImageDataUrl") &&
           patch.coverImageDataUrl !== state.venue.coverImageDataUrl
         ) {
-          if (patch.coverImageDataUrl) {
+          if (patch.coverImageDataUrl)
             appearance.coverImageStorageId = await uploadImage(
               patch.coverImageDataUrl,
             );
-          } else {
-            appearance.removeCoverImage = true;
-          }
+          else appearance.removeCoverImage = true;
         }
         if (
           hasOwn(patch, "coverVideo") &&
           patch.coverVideo?.embedUrl !== state.venue.coverVideo?.embedUrl
         ) {
-          if (patch.coverVideo) {
-            appearance.coverVideoUrl = videoUrl(patch.coverVideo);
-          } else {
-            appearance.removeCoverVideo = true;
-          }
+          if (patch.coverVideo)
+            appearance.coverVideoUrl = videoToUrl(patch.coverVideo);
+          else appearance.removeCoverVideo = true;
         }
         if (Object.keys(appearance).length > 1) {
           await updateAppearance(appearance);
@@ -313,15 +265,11 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       async deleteCategory(id) {
         await deleteCategoryMutation({ categoryId: id as Id<"categories"> });
       },
-      async moveCategory(id, direction) {
+      async reorderCategories(ids) {
         if (!menuId) throw new Error("MENU_NOT_FOUND");
-        const index = state.categories.findIndex(
-          (category) => category.id === id,
-        );
-        const next = move(state.categories, index, index + direction);
-        await reorderCategories({
+        await reorderCategoriesMutation({
           menuId,
-          categoryIds: next.map((category) => category.id as Id<"categories">),
+          categoryIds: ids as Id<"categories">[],
         });
       },
       async addItem(categoryId, item) {
@@ -332,6 +280,8 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           details: item.details || undefined,
           priceCents: item.priceCents,
           ingredients: item.ingredients.length ? item.ingredients : undefined,
+          allergens: item.allergens,
+          tags: item.tags,
           pairingName: item.pairingName || undefined,
           pairingPriceCents: item.pairingPriceCents,
           reviewRating: item.reviewRating,
@@ -340,12 +290,15 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           reviewAuthor: item.reviewAuthor || undefined,
         });
         if (item.video) {
-          await setExternalVideo({ itemId, url: videoUrl(item.video) });
+          await setExternalVideo({ itemId, url: videoToUrl(item.video) });
         }
         return itemId;
       },
       async updateItem(_categoryId, id, patch) {
         const itemId = id as Id<"menuItems">;
+        // Absent key = unchanged; key present but empty = cleared (null).
+        const clearable = <K extends keyof typeof patch>(key: K) =>
+          hasOwn(patch, key) ? (patch[key] ?? null) : undefined;
         await updateItemMutation({
           itemId,
           name: patch.name,
@@ -354,16 +307,21 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
           priceCents: patch.priceCents,
           active: patch.available,
           ingredients: patch.ingredients,
+          allergens: clearable("allergens") as string[] | null | undefined,
+          tags: patch.tags,
           pairingName: patch.pairingName,
-          pairingPriceCents: patch.pairingPriceCents,
-          reviewRating: patch.reviewRating,
-          reviewCount: patch.reviewCount,
+          pairingPriceCents: clearable("pairingPriceCents") as
+            | number
+            | null
+            | undefined,
+          reviewRating: clearable("reviewRating") as number | null | undefined,
+          reviewCount: clearable("reviewCount") as number | null | undefined,
           reviewQuote: patch.reviewQuote,
           reviewAuthor: patch.reviewAuthor,
         });
         if (hasOwn(patch, "video")) {
           if (patch.video) {
-            await setExternalVideo({ itemId, url: videoUrl(patch.video) });
+            await setExternalVideo({ itemId, url: videoToUrl(patch.video) });
           } else {
             await removeExternalVideo({ itemId });
           }
@@ -372,33 +330,17 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
       async deleteItem(_categoryId, id) {
         await deleteItemMutation({ itemId: id as Id<"menuItems"> });
       },
-      async moveItem(categoryId, id, direction) {
-        const category = state.categories.find(
-          (candidate) => candidate.id === categoryId,
-        );
-        if (!category) throw new Error("CATEGORY_NOT_FOUND");
-        const index = category.items.findIndex((item) => item.id === id);
-        const next = move(category.items, index, index + direction);
-        await reorderItems({
+      async reorderItems(categoryId, ids) {
+        await reorderItemsMutation({
           categoryId: categoryId as Id<"categories">,
-          itemIds: next.map((item) => item.id as Id<"menuItems">),
+          itemIds: ids as Id<"menuItems">[],
         });
       },
       async addItemImage(_categoryId, itemId, image) {
-        const venueId = state.venue.id as Id<"venues">;
-        const uploadUrl = await generateImageUploadUrl({ venueId });
-        const blob = await (await fetch(image.dataUrl)).blob();
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": blob.type || "application/octet-stream" },
-          body: blob,
-        });
-        if (!response.ok) throw new Error("IMAGE_UPLOAD_FAILED");
-        const result = (await response.json()) as { storageId?: string };
-        if (!result.storageId) throw new Error("IMAGE_UPLOAD_FAILED");
+        const storageId = await uploadImage(image.dataUrl);
         await addItemImageMutation({
           itemId: itemId as Id<"menuItems">,
-          storageId: result.storageId as Id<"_storage">,
+          storageId,
           alt: image.alt || undefined,
         });
       },
@@ -406,47 +348,76 @@ export function RemoteMenuStoreProvider({ children }: { children: ReactNode }) {
         await removeMedia({ mediaId: imageId as Id<"media"> });
       },
       async setTableCount(tableCount) {
-        const venueId = state.venue.id as Id<"venues">;
-        if (!venueId) throw new Error("VENUE_NOT_FOUND");
-        await setTableCountMutation({ venueId, tableCount });
+        await setTableCountMutation({ venueId: currentVenueId(), tableCount });
       },
       async publish() {
         if (!menuId) throw new Error("MENU_NOT_FOUND");
         await publishMutation({ menuId });
       },
+      async setSoldOut(itemId, soldOut) {
+        await setSoldOutMutation({
+          itemId: itemId as Id<"menuItems">,
+          soldOut,
+        });
+      },
+      async setAutoRestock(enabled) {
+        await setAutoRestockMutation({ venueId: currentVenueId(), enabled });
+      },
+      async setDailySpecial(input) {
+        const imageStorageId =
+          input.imageDataUrl === undefined
+            ? (state.live.special?.imageStorageId as Id<"_storage"> | undefined)
+            : input.imageDataUrl
+              ? await uploadImage(input.imageDataUrl)
+              : undefined;
+        await setDailySpecialMutation({
+          venueId: currentVenueId(),
+          name: input.name,
+          description: input.description || undefined,
+          priceCents: input.priceCents,
+          imageStorageId,
+          endsAt: input.endsAt,
+        });
+      },
+      async clearDailySpecial() {
+        await clearDailySpecialMutation({ venueId: currentVenueId() });
+      },
       async resetDemo() {
         throw new Error("RESET_NOT_AVAILABLE_IN_PRODUCTION");
       },
-    }),
-    [
-      addCategoryMutation,
-      addItemImageMutation,
-      addItemMutation,
-      changeSlug,
-      createVenueMutation,
-      deleteCategoryMutation,
-      deleteItemMutation,
-      generateImageUploadUrl,
-      hydrated,
-      loadMoreVenues,
-      menuId,
-      publishMutation,
-      removeExternalVideo,
-      removeMedia,
-      reorderCategories,
-      reorderItems,
-      setExternalVideo,
-      setTableCountMutation,
-      state,
-      updateAppearance,
-      updateCategoryMutation,
-      updateItemMutation,
-      updateProfile,
-      venues,
-      venuesStatus,
-      workspace?.venue._id,
-    ],
-  );
+    };
+  }, [
+    addCategoryMutation,
+    addItemImageMutation,
+    addItemMutation,
+    changeSlug,
+    clearDailySpecialMutation,
+    createVenueMutation,
+    deleteCategoryMutation,
+    deleteItemMutation,
+    generateImageUploadUrl,
+    hydrated,
+    loadMoreVenues,
+    menuId,
+    publishMutation,
+    removeExternalVideo,
+    removeMedia,
+    reorderCategoriesMutation,
+    reorderItemsMutation,
+    setAutoRestockMutation,
+    setDailySpecialMutation,
+    setExternalVideo,
+    setSoldOutMutation,
+    setTableCountMutation,
+    state,
+    updateAppearance,
+    updateCategoryMutation,
+    updateItemMutation,
+    updateProfile,
+    venues,
+    venuesStatus,
+    workspace?.venue._id,
+  ]);
 
   return (
     <MenuStoreContext.Provider value={store}>

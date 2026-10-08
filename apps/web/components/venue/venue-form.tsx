@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { PageHead } from "@/components/dashboard/ui";
 import { slugify, validateSlug } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
 
@@ -31,15 +32,14 @@ export function VenueForm({ compact = false }: { compact?: boolean }) {
   return (
     <>
       {compact ? (
-        <div className="dashboard-head">
-          <div>
-            <span className="eyebrow">Établissements</span>
-            <h1 className="serif">Ajouter un établissement</h1>
-            <p className="muted">
-              Votre compte peut en gérer autant que nécessaire.
-            </p>
-          </div>
-        </div>
+        <PageHead
+          back={{ href: "/dashboard/venue", label: "Établissement" }}
+          title="Ajouter un établissement"
+        >
+          <p className="pro-muted">
+            Votre compte peut en gérer autant que nécessaire.
+          </p>
+        </PageHead>
       ) : (
         <>
           <span className="eyebrow">Première étape</span>

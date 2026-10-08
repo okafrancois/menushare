@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: { absolute: "Apparence du menu · MenuShare" },
+  title: { absolute: "Apparence de la carte · MenuShare" },
   description: "Personnalisez le logo, la couverture et les couleurs du menu.",
 };
 

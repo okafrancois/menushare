@@ -17,6 +17,22 @@ unique et de le partager par QR code.
 - URL partageable, QR code SVG téléchargeable et interface publique responsive.
 - CRUD complet, réordre, disponibilité, suppression et galeries d’images.
 
+## Expérience mobile
+
+**Menu client** (`/menu/<slug>`) : en-tête compact qui affiche « Table N » après
+le scan d’un QR de table (`?t=N`), ou l’itinéraire, l’appel et les horaires
+quand on arrive par un lien direct ; onglets de catégories collants ; filtres
+végétarien, sans gluten et 14 allergènes (un plat aux allergènes non renseignés
+est masqué) ; recherche sans accents ; « Ma sélection », pense-bête de la table
+gardé 12 h sur l’appareil, partageable par lien (`?sel=`) et affichable en grand
+pour le serveur ; mode sombre automatique.
+
+**App restaurateur** (`/dashboard`) : quatre onglets (Service, Carte, Stats,
+Établissement) et une barre « modifications en attente » qui liste ce que la
+publication changera. Les ruptures de stock et la suggestion du jour sont
+appliquées en direct, hors brouillon : la carte en salle change immédiatement,
+et un cron remet les plats en stock chaque nuit (désactivable).
+
 ## Stack
 
 Le dépôt suit l'architecture d'Eventflow : Bun, Turborepo, Next.js App Router,
@@ -80,12 +96,13 @@ Les codes sont envoyés via Resend. Ils comportent 6 chiffres, expirent après
 
 ```bash
 bun run dev:web       # Next.js sur http://localhost:3000
-bun run dev:backend   # Convex dev
+bun run dev:backend   # Convex dev (régénère aussi convex/_generated)
 bun run check-types
 bun run test
-bun run test:e2e
+bun run test:e2e      # démarre Next.js sur le port 3100 (E2E_PORT pour changer)
 bun run build
 ```
 
-La suite actuelle comprend 19 tests unitaires et 8 scénarios E2E Chromium sur
-les pages publiques et privées, dont un contrôle mobile à 390 × 844.
+La suite comprend 68 tests unitaires côté web, 74 tests Convex (convex-test) et
+12 scénarios E2E Chromium sur les pages publiques et privées, dont plusieurs
+parcours mobiles à 390 × 844.

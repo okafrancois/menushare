@@ -8,7 +8,9 @@ import {
   hydrateMenuState,
   move,
   parsePriceToCents,
+  priceToInput,
   publishMenu,
+  reorderById,
   slugify,
   validateSlug,
 } from "@/lib/menu-domain";
@@ -68,6 +70,29 @@ describe("plats et médias", () => {
     expect(item.details).toContain("préparation");
   });
 
+  it("refuse un prix vide au lieu de l’enregistrer à 0 €", () => {
+    expect(() => parsePriceToCents("  ")).toThrow("INVALID_PRICE");
+    expect(parsePriceToCents("0")).toBe(0);
+    expect(priceToInput(1250)).toBe("12,50");
+    expect(priceToInput(1400)).toBe("14");
+    expect(priceToInput(undefined)).toBe("");
+  });
+
+  it("garde allergènes et badges, « non renseigné » par défaut", () => {
+    const documented = createItem({
+      id: "1",
+      name: "Pasta",
+      price: "18",
+      allergens: ["gluten"],
+      tags: ["vegetarien"],
+    });
+    expect(documented.allergens).toEqual(["gluten"]);
+    expect(documented.tags).toEqual(["vegetarien"]);
+    const bare = createItem({ id: "2", name: "Pain", price: "2" });
+    expect(bare.allergens).toBeUndefined();
+    expect(bare.tags).toEqual([]);
+  });
+
   it("rejette un prix ou un hébergeur vidéo invalide", () => {
     expect(() => parsePriceToCents("gratuit? ")).toThrow("INVALID_PRICE");
     expect(() =>
@@ -87,6 +112,17 @@ describe("ordre et publication", () => {
     expect(move(source, 2, 0)).toEqual(["c", "a", "b"]);
     expect(source).toEqual(["a", "b", "c"]);
     expect(move(source, 0, -1)).toBe(source);
+  });
+
+  it("applique un ordre explicite et ignore un ordre incomplet", () => {
+    const items = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    expect(reorderById(items, ["c", "a", "b"]).map((i) => i.id)).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+    expect(reorderById(items, ["c", "a"])).toBe(items);
+    expect(reorderById(items, ["c", "a", "z"])).toBe(items);
   });
 
   it("publie un snapshot indépendant et incrémente sa version", () => {
@@ -133,5 +169,28 @@ describe("état initial et hydratation", () => {
     const hydrated = hydrateMenuState(legacy);
     expect(hydrated.categories[0].items[0].details).toBe("");
     expect(hydrated.categories[0].items[0].ingredients).toEqual([]);
+  });
+
+  it("complète une sauvegarde d’avant les ruptures et les badges", () => {
+    const legacy = JSON.parse(JSON.stringify(createDemoState())) as Record<
+      string,
+      unknown
+    > & { categories: { items: Record<string, unknown>[] }[] };
+    delete legacy.live;
+    delete legacy.categories[0]!.items[0]!.tags;
+    const hydrated = hydrateMenuState(legacy);
+    expect(hydrated.live).toEqual({
+      soldOutIds: [],
+      autoRestock: true,
+      special: undefined,
+    });
+    expect(hydrated.categories[0]!.items[0]!.tags).toEqual([]);
+  });
+
+  it("démarre la démo avec une rupture et une suggestion du jour", () => {
+    const demo = createDemoState();
+    expect(demo.live.soldOutIds).toEqual(["arancini"]);
+    expect(demo.live.special?.name).toBe("Risotto ai Porcini");
+    expect(demo.published?.version).toBe(1);
   });
 });

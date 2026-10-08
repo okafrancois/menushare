@@ -1,166 +1,165 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { slugify, validateSlug } from "@/lib/menu-domain";
+import { HoursEditor, validateHours } from "@/components/dashboard/hours-editor";
+import { errorMessage, PageHead, useToast } from "@/components/dashboard/ui";
+import { slugify, validateSlug, type Venue } from "@/lib/menu-domain";
 import { useMenuStore } from "@/lib/menu-store";
 
 export default function SettingsPage() {
-  const { state, updateVenue, resetDemo, remote } = useMenuStore();
-  const [form, setForm] = useState(state.venue);
-  const [saved, setSaved] = useState(false);
+  const { state, updateVenue } = useMenuStore();
+  const toast = useToast();
+  const [form, setForm] = useState<Venue>(state.venue);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
   const slugError = validateSlug(form.slug);
-  const publicHost = (
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app"
-  )
+  const publicHost = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://menushare.app")
     .replace(/^https?:\/\//, "")
     .replace(/\/$/, "");
-  useEffect(() => setForm(state.venue), [state.venue]);
+
+  // A venue switch or a save from elsewhere refreshes the form.
+  const venueKey = JSON.stringify(state.venue);
+  useEffect(() => setForm(JSON.parse(venueKey) as Venue), [venueKey]);
+
+  function field<K extends keyof Venue>(key: K) {
+    return {
+      value: (form[key] as string | undefined) ?? "",
+      onChange: (
+        event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+      ) => setForm({ ...form, [key]: event.target.value }),
+    };
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setError("");
+    setStatus("");
+    const hoursError = validateHours(form.openingHours ?? []);
+    if (!form.name.trim()) return setError("Le nom est obligatoire.");
+    if (slugError) return setError(slugError);
+    if (hoursError) return setError(hoursError);
+    setSaving(true);
+    try {
+      await updateVenue({
+        name: form.name.trim(),
+        kind: form.kind.trim(),
+        city: form.city.trim(),
+        phone: form.phone.trim(),
+        slug: slugify(form.slug),
+        tagline: form.tagline.trim(),
+        description: form.description.trim(),
+        address: form.address.trim(),
+        hours: form.hours.trim(),
+        openingHours: form.openingHours ?? [],
+      });
+      setStatus("Modifications enregistrées · visibles après publication.");
+      toast("Informations enregistrées · à publier");
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <>
-      <div className="dashboard-head">
-        <div>
-          <span className="eyebrow">Établissement</span>
-          <h1 className="serif">Réglages</h1>
-        </div>
-      </div>
-      <form
-        className="settings-card settings-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (slugError) return;
-          updateVenue({ ...form, slug: slugify(form.slug) });
-          setSaved(true);
-          window.setTimeout(() => setSaved(false), 1600);
-        }}
-      >
-        <div className="form-grid">
-          <div className="form-group">
-            <label htmlFor="settings-name">Nom</label>
-            <input
-              className="input"
-              id="settings-name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
+      <PageHead
+        back={{ href: "/dashboard/venue", label: "Établissement" }}
+        title="Informations"
+      />
+      <form className="pro-stack" onSubmit={save}>
+        <section className="pro-card">
+          <div className="pro-form flat">
+            <label className="pro-field">
+              <span>Nom</span>
+              <input {...field("name")} required />
+            </label>
+            <label className="pro-field">
+              <span>Type</span>
+              <input {...field("kind")} placeholder="Trattoria, bistrot, bar…" />
+            </label>
+            <label className="pro-field">
+              <span>Ville</span>
+              <input {...field("city")} />
+            </label>
+            <label className="pro-field">
+              <span>Adresse</span>
+              <input {...field("address")} placeholder="12 rue des Remparts, 33000 Bordeaux" />
+            </label>
+            <label className="pro-field">
+              <span>Téléphone</span>
+              <input {...field("phone")} inputMode="tel" />
+            </label>
+            <label className="pro-field">
+              <span>Adresse du menu</span>
+              <span className="pro-slug">
+                <small>{publicHost}/menu/</small>
+                <input
+                  aria-label="Slug public"
+                  value={form.slug}
+                  onChange={(event) =>
+                    setForm({ ...form, slug: slugify(event.target.value) })
+                  }
+                />
+              </span>
+            </label>
+            {slugError ? <p className="pro-error">{slugError}</p> : null}
           </div>
-          <div className="form-group">
-            <label htmlFor="settings-kind">Type</label>
-            <input
-              className="input"
-              id="settings-kind"
-              value={form.kind}
-              onChange={(e) => setForm({ ...form, kind: e.target.value })}
-            />
+        </section>
+
+        <section className="pro-card">
+          <h2 className="pro-card-title">Présentation</h2>
+          <div className="pro-form flat">
+            <label className="pro-field">
+              <span>Phrase d’accroche</span>
+              <input {...field("tagline")} maxLength={120} />
+            </label>
+            <label className="pro-field">
+              <span>Présentation</span>
+              <textarea {...field("description")} rows={4} />
+            </label>
           </div>
-          <div className="form-group">
-            <label htmlFor="settings-city">Ville</label>
-            <input
-              className="input"
-              id="settings-city"
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="settings-phone">Téléphone</label>
-            <input
-              className="input"
-              id="settings-phone"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-          </div>
-          <div className="form-group span-2">
-            <label htmlFor="settings-slug">Slug public</label>
-            <div className="slug-input">
-              <span>{`${publicHost}/menu/`}</span>
+        </section>
+
+        <section className="pro-card" id="horaires" aria-labelledby="hours-title">
+          <h2 className="pro-card-title" id="hours-title">
+            Horaires d’ouverture
+          </h2>
+          <p className="pro-hint">
+            Ils affichent « Ouvert jusqu’à… » sur votre carte et servent d’heure
+            de retrait par défaut de la suggestion du jour.
+          </p>
+          <HoursEditor
+            value={form.openingHours ?? []}
+            onChange={(openingHours) => setForm({ ...form, openingHours })}
+          />
+          <div className="pro-form flat">
+            <label className="pro-field">
+              <span>Précision sur les horaires</span>
               <input
-                id="settings-slug"
-                value={form.slug}
-                onChange={(e) =>
-                  setForm({ ...form, slug: slugify(e.target.value) })
-                }
+                {...field("hours")}
+                placeholder="Ex. Fermé en août, brunch le dimanche"
               />
-            </div>
-            {slugError ? <span className="form-error">{slugError}</span> : null}
+            </label>
           </div>
-          <div className="form-group span-2">
-            <label htmlFor="settings-tagline">Phrase d’accroche</label>
-            <input
-              className="input"
-              id="settings-tagline"
-              value={form.tagline}
-              onChange={(e) => setForm({ ...form, tagline: e.target.value })}
-            />
-          </div>
-          <div className="form-group span-2">
-            <label htmlFor="settings-description">Présentation</label>
-            <textarea
-              className="input textarea"
-              id="settings-description"
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-            />
-          </div>
-          <div className="form-group span-2">
-            <label htmlFor="settings-address">Adresse</label>
-            <input
-              className="input"
-              id="settings-address"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-          </div>
-          <div className="form-group span-2">
-            <label htmlFor="settings-hours">Horaires</label>
-            <input
-              className="input"
-              id="settings-hours"
-              value={form.hours}
-              onChange={(e) => setForm({ ...form, hours: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="modal-actions">
-          <span className="save-message" role="status">
-            {saved ? "Modifications enregistrées." : ""}
+        </section>
+
+        {error ? (
+          <p className="pro-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="pro-save-row">
+          <span className="pro-muted" role="status">
+            {status}
           </span>
-          <button
-            className="button button-primary"
-            type="submit"
-            disabled={Boolean(slugError)}
-          >
-            Enregistrer
+          <button className="pro-btn primary" type="submit" disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
       </form>
-      {!remote ? (
-        <section className="danger-zone">
-          <div>
-            <h2>Réinitialiser le mode démo</h2>
-            <p>
-              Remet les données locales de Nonna Lydie. Cette action remplace
-              votre brouillon actuel.
-            </p>
-          </div>
-          <button
-            className="button"
-            type="button"
-            onClick={() => {
-              if (confirm("Réinitialiser toutes les données locales ?"))
-                resetDemo();
-            }}
-          >
-            <RotateCcw size={16} /> Réinitialiser
-          </button>
-        </section>
-      ) : null}
     </>
   );
 }

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: { absolute: "Publier et partager · MenuShare" },
-  description: "Publiez votre menu, copiez son URL et téléchargez son QR code.",
+  title: { absolute: "QR codes et tables · MenuShare" },
+  description: "QR code général de la carte et QR codes par table, prêts à imprimer.",
 };
 
 export default function ShareLayout({ children }: { children: ReactNode }) {

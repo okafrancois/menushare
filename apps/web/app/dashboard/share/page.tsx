@@ -1,27 +1,20 @@
 "use client";
 
-import {
-  Check,
-  Copy,
-  Download,
-  ExternalLink,
-  Printer,
-  QrCode,
-  Table2,
-} from "lucide-react";
+import { Copy, Download, ExternalLink, Minus, Plus, Printer, Share2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useRef, useState } from "react";
 
+import { errorMessage, PageHead, useToast } from "@/components/dashboard/ui";
 import { menuQrUrl } from "@/lib/menu-analytics";
 import { useMenuStore } from "@/lib/menu-store";
 
 const MAX_TABLES = 200;
 
 export default function SharePage() {
-  const { state, publish } = useMenuStore();
+  const { state } = useMenuStore();
+  const toast = useToast();
   const [origin, setOrigin] = useState("https://menushare.app");
-  const [copied, setCopied] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
   const url = `${origin}/menu/${state.venue.slug}`;
 
@@ -30,11 +23,19 @@ export default function SharePage() {
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(url);
+      toast("Lien de la carte copié");
     } catch {
-      /* clipboard can be unavailable on HTTP */
+      toast(url);
     }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function share() {
+    try {
+      if (navigator.share) await navigator.share({ title: state.venue.name, url });
+      else await copyUrl();
+    } catch {
+      // Sharing cancelled.
+    }
   }
 
   function downloadQr() {
@@ -52,172 +53,153 @@ export default function SharePage() {
 
   return (
     <>
-      <div className="dashboard-head">
-        <div>
-          <span className="eyebrow">Diffusion</span>
-          <h1 className="serif">Partager le menu</h1>
-        </div>
-        {state.published ? (
-          <span className="status-pill">
-            <Check size={14} /> En ligne · v{state.published.version}
-          </span>
-        ) : (
-          <span className="status-pill draft">Brouillon</span>
-        )}
-      </div>
-      <div className="share-grid">
-        <section className="share-card">
-          <span className="eyebrow">Adresse publique</span>
-          <h2 className="serif">Une URL simple, partout.</h2>
-          <p>
-            Ajoutez-la à Instagram, Google Business, votre site ou envoyez-la
-            directement à vos clients.
-          </p>
-          <div className="url-box">
-            <code>{url}</code>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Copier l’URL"
-              onClick={copyUrl}
-            >
-              {copied ? <Check /> : <Copy />}
-            </button>
-          </div>
-          <div className="share-actions">
-            <button
-              className="button button-primary"
-              type="button"
-              onClick={publish}
-            >
-              {state.published
-                ? "Republier les modifications"
-                : "Publier le menu"}
-            </button>
-            <Link className="button" href={`/menu/${state.venue.slug}`}>
-              <ExternalLink size={16} /> Ouvrir
-            </Link>
-          </div>
-        </section>
-        <section className="qr-card">
-          <div className="qr-frame" ref={qrRef} data-testid="qr-code">
+      <PageHead
+        back={{ href: "/dashboard/venue", label: "Établissement" }}
+        title="QR codes et tables"
+      />
+      {!state.published ? (
+        <p className="pro-banner warn">
+          Votre carte n’est pas encore publiée : le QR code mènera à une page
+          vide tant que vous n’aurez pas publié.
+        </p>
+      ) : null}
+      <div className="pro-split">
+        <section className="pro-card pro-qr-card" aria-labelledby="qr-title">
+          <div className="pro-qr-frame" ref={qrRef} data-testid="qr-code">
             <QRCodeSVG
               value={menuQrUrl(url)}
-              size={220}
+              size={200}
               level="H"
-              bgColor="#fffdf9"
+              bgColor="#ffffff"
               fgColor={state.venue.accentColor}
               imageSettings={
                 state.venue.logoDataUrl
-                  ? {
-                      src: state.venue.logoDataUrl,
-                      height: 36,
-                      width: 36,
-                      excavate: true,
-                    }
+                  ? { src: state.venue.logoDataUrl, height: 34, width: 34, excavate: true }
                   : undefined
               }
             />
           </div>
-          <h2>QR code prêt à imprimer</h2>
-          <p>
-            Le QR code pointe toujours vers votre menu, même après une mise à
-            jour. Chaque scan est compté dans vos statistiques.
+          <h2 id="qr-title">QR code général</h2>
+          <p className="pro-hint">
+            Vitrine, flyers, réseaux sociaux. Il reste valable après chaque mise à
+            jour de la carte. Imprimez-le au minimum en 3 × 3 cm.
           </p>
-          <button
-            className="button button-dark"
-            type="button"
-            onClick={downloadQr}
-          >
-            <Download size={16} /> Télécharger en SVG
-          </button>
+          <div className="pro-url">
+            <code>{url.replace(/^https?:\/\//, "")}</code>
+            <button className="pro-icon-btn plain" type="button" aria-label="Copier l’URL" onClick={copyUrl}>
+              <Copy size={17} />
+            </button>
+            <Link
+              className="pro-icon-btn plain"
+              href={`/menu/${state.venue.slug}`}
+              target="_blank"
+              aria-label="Ouvrir la carte publique"
+            >
+              <ExternalLink size={17} />
+            </Link>
+          </div>
+          <div className="pro-btn-row">
+            <button className="pro-btn dark small" type="button" onClick={downloadQr}>
+              <Download size={16} /> Télécharger en SVG
+            </button>
+            <button className="pro-btn ghost small" type="button" onClick={share}>
+              <Share2 size={16} /> Partager le lien
+            </button>
+          </div>
         </section>
-      </div>
-      <TableQrSettings />
-      <div className="info-banner">
-        <QrCode />
-        <div>
-          <strong>Conseil d’impression</strong>
-          <p>
-            Gardez une zone blanche autour du QR code et imprimez-le au minimum
-            en 3 × 3 cm.
-          </p>
-        </div>
+        <TableSettings menuUrl={url} />
       </div>
     </>
   );
 }
 
-function TableQrSettings() {
+function TableSettings({ menuUrl }: { menuUrl: string }) {
   const { state, setTableCount } = useMenuStore();
+  const toast = useToast();
   const tableCount = state.venue.tableCount ?? 0;
   const [value, setValue] = useState(String(tableCount));
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle",
-  );
+  const [saving, setSaving] = useState(false);
   useEffect(() => setValue(String(tableCount)), [tableCount]);
   const next = Number(value);
   const valid = Number.isInteger(next) && next >= 0 && next <= MAX_TABLES;
 
+  async function save(count: number) {
+    setSaving(true);
+    try {
+      await setTableCount(count);
+      toast(count ? `${count} QR code${count > 1 ? "s" : ""} de table prêt${count > 1 ? "s" : ""}` : "QR codes de table retirés");
+    } catch (cause) {
+      toast(errorMessage(cause, "Enregistrement impossible, réessayez."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <section className="settings-card tables-card">
-      <h2>
-        <Table2 size={18} /> Un QR code par table
+    <section className="pro-card" aria-labelledby="tables-title">
+      <h2 className="pro-card-title" id="tables-title">
+        Un QR code par table
       </h2>
-      <p>
-        Numérotez vos tables de 1 à N : chaque QR code indique d’où vient le
-        scan, et les Statistiques comparent vos emplacements.
+      <p className="pro-hint">
+        Le client voit « Table N » sur la carte, et vos statistiques comparent
+        chaque emplacement. Le nombre de tables ne demande pas de republier.
       </p>
       <form
-        className="field-action"
-        onSubmit={async (event) => {
+        className="pro-table-count"
+        onSubmit={(event) => {
           event.preventDefault();
-          if (!valid) return;
-          setStatus("saving");
-          try {
-            await setTableCount(next);
-            setStatus("saved");
-            window.setTimeout(() => setStatus("idle"), 1600);
-          } catch {
-            setStatus("error");
-          }
+          if (valid && next !== tableCount) void save(next);
         }}
       >
-        <label className="sr-only" htmlFor="table-count">
-          Nombre de tables
-        </label>
-        <input
-          className="input tables-input"
-          id="table-count"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={MAX_TABLES}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          aria-describedby="table-count-hint"
-        />
+        <label htmlFor="table-count">Nombre de tables</label>
+        <div className="pro-stepper">
+          <button
+            type="button"
+            aria-label="Une table de moins"
+            onClick={() => setValue(String(Math.max(0, (valid ? next : tableCount) - 1)))}
+          >
+            <Minus size={16} />
+          </button>
+          <input
+            id="table-count"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={MAX_TABLES}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+          <button
+            type="button"
+            aria-label="Une table de plus"
+            onClick={() => setValue(String(Math.min(MAX_TABLES, (valid ? next : tableCount) + 1)))}
+          >
+            <Plus size={16} />
+          </button>
+        </div>
         <button
-          className="button"
+          className="pro-btn line small"
           type="submit"
-          disabled={!valid || next === tableCount || status === "saving"}
+          disabled={!valid || next === tableCount || saving}
         >
-          {status === "saved" ? <Check size={16} /> : null}
-          {status === "saved" ? "Enregistré" : "Enregistrer"}
+          Enregistrer
         </button>
-        {tableCount > 0 ? (
-          <Link className="button button-dark" href="/dashboard/share/tables">
+      </form>
+      {tableCount ? (
+        <>
+          <div className="pro-table-grid" aria-label="Aperçu des QR codes de table">
+            {Array.from({ length: Math.min(tableCount, 8) }, (_, index) => index + 1).map((table) => (
+              <figure key={table}>
+                <QRCodeSVG value={menuQrUrl(menuUrl, table)} size={64} level="M" />
+                <figcaption>Table {table}</figcaption>
+              </figure>
+            ))}
+            {tableCount > 8 ? <span className="pro-more">+{tableCount - 8}</span> : null}
+          </div>
+          <Link className="pro-btn primary block" href="/dashboard/share/tables">
             <Printer size={16} /> Imprimer les {tableCount} QR codes
           </Link>
-        ) : null}
-      </form>
-      <small id="table-count-hint" className="tables-hint">
-        Nombre de tables, jusqu’à {MAX_TABLES}.
-      </small>
-      {status === "error" ? (
-        <p className="tables-error" role="alert">
-          Enregistrement impossible, réessayez.
-        </p>
+        </>
       ) : null}
     </section>
   );

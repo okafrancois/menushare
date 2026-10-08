@@ -5,7 +5,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 export const metadata: Metadata = {
   title: {
-    default: "Tableau de bord",
+    default: "Service",
     template: "%s · MenuShare",
   },
   description: "Gérez vos établissements et leurs menus sur MenuShare.",

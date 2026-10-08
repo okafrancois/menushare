@@ -18,14 +18,23 @@ import {
   createDemoState,
   createVenueState,
   hydrateMenuState,
-  move,
   publishMenu,
+  reorderById,
   STORAGE_KEY,
 } from "@/lib/menu-domain";
 
 type MaybePromise<T> = T | Promise<T>;
 
 export type VenueChoice = Pick<Venue, "id" | "name" | "slug" | "kind" | "city">;
+
+export type DailySpecialInput = {
+  name: string;
+  description: string;
+  priceCents: number;
+  /** New photo as a data URL, `null` to remove it, `undefined` to keep it. */
+  imageDataUrl?: string | null;
+  endsAt: number;
+};
 
 export type MenuStore = {
   state: MenuState;
@@ -53,7 +62,7 @@ export type MenuStore = {
     patch: Partial<MenuCategory>,
   ) => MaybePromise<void>;
   deleteCategory: (id: string) => MaybePromise<void>;
-  moveCategory: (id: string, direction: -1 | 1) => MaybePromise<void>;
+  reorderCategories: (ids: string[]) => MaybePromise<void>;
   addItem: (categoryId: string, item: MenuItem) => MaybePromise<string>;
   updateItem: (
     categoryId: string,
@@ -61,11 +70,7 @@ export type MenuStore = {
     patch: Partial<MenuItem>,
   ) => MaybePromise<void>;
   deleteItem: (categoryId: string, id: string) => MaybePromise<void>;
-  moveItem: (
-    categoryId: string,
-    id: string,
-    direction: -1 | 1,
-  ) => MaybePromise<void>;
+  reorderItems: (categoryId: string, ids: string[]) => MaybePromise<void>;
   addItemImage: (
     categoryId: string,
     itemId: string,
@@ -77,6 +82,11 @@ export type MenuStore = {
     imageId: string,
   ) => MaybePromise<void>;
   publish: () => MaybePromise<void>;
+  /** Live: applied to the public menu immediately, without publishing. */
+  setSoldOut: (itemId: string, soldOut: boolean) => MaybePromise<void>;
+  setAutoRestock: (enabled: boolean) => MaybePromise<void>;
+  setDailySpecial: (input: DailySpecialInput) => MaybePromise<void>;
+  clearDailySpecial: () => MaybePromise<void>;
   resetDemo: () => MaybePromise<void>;
 };
 
@@ -213,16 +223,13 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
             ),
           }),
         ),
-      moveCategory: (id, direction) =>
-        setState((current) => {
-          const index = current.categories.findIndex(
-            (category) => category.id === id,
-          );
-          return touch({
+      reorderCategories: (ids) =>
+        setState((current) =>
+          touch({
             ...current,
-            categories: move(current.categories, index, index + direction),
-          });
-        }),
+            categories: reorderById(current.categories, ids),
+          }),
+        ),
       addItem: (categoryId, item) => {
         setState((current) =>
           touch({
@@ -256,6 +263,12 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
         setState((current) =>
           touch({
             ...current,
+            live: {
+              ...current.live,
+              soldOutIds: current.live.soldOutIds.filter(
+                (soldOutId) => soldOutId !== id,
+              ),
+            },
             categories: current.categories.map((category) =>
               category.id === categoryId
                 ? {
@@ -266,18 +279,15 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
             ),
           }),
         ),
-      moveItem: (categoryId, id, direction) =>
+      reorderItems: (categoryId, ids) =>
         setState((current) =>
           touch({
             ...current,
-            categories: current.categories.map((category) => {
-              if (category.id !== categoryId) return category;
-              const index = category.items.findIndex((item) => item.id === id);
-              return {
-                ...category,
-                items: move(category.items, index, index + direction),
-              };
-            }),
+            categories: current.categories.map((category) =>
+              category.id === categoryId
+                ? { ...category, items: reorderById(category.items, ids) }
+                : category,
+            ),
           }),
         ),
       addItemImage: (categoryId, itemId, image) =>
@@ -322,6 +332,45 @@ export function MenuStoreProvider({ children }: { children: ReactNode }) {
           }),
         ),
       publish: () => setState((current) => publishMenu(current)),
+      // Live service data is not part of the draft: `changedAt` is untouched.
+      setSoldOut: (itemId, soldOut) =>
+        setState((current) => ({
+          ...current,
+          live: {
+            ...current.live,
+            soldOutIds: soldOut
+              ? [...new Set([...current.live.soldOutIds, itemId])]
+              : current.live.soldOutIds.filter((id) => id !== itemId),
+          },
+        })),
+      setAutoRestock: (enabled) =>
+        setState((current) => ({
+          ...current,
+          live: { ...current.live, autoRestock: enabled },
+        })),
+      setDailySpecial: (input) =>
+        setState((current) => ({
+          ...current,
+          live: {
+            ...current.live,
+            special: {
+              id: current.live.special?.id ?? uid("special"),
+              name: input.name.trim(),
+              description: input.description.trim(),
+              priceCents: input.priceCents,
+              imageUrl:
+                input.imageDataUrl === undefined
+                  ? current.live.special?.imageUrl
+                  : (input.imageDataUrl ?? undefined),
+              endsAt: input.endsAt,
+            },
+          },
+        })),
+      clearDailySpecial: () =>
+        setState((current) => ({
+          ...current,
+          live: { ...current.live, special: undefined },
+        })),
       resetDemo: () => {
         const demo = createDemoState(Date.now());
         setVenueStates({ [demo.venue.id]: demo });

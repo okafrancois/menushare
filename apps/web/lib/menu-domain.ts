@@ -1,4 +1,11 @@
+import type {
+  AllergenKey,
+  DishTagKey,
+  OpeningDay,
+} from "@repo/backend/menu";
 import { normalizeExternalVideoUrl } from "@repo/backend/video";
+
+export type { AllergenKey, DishTagKey, OpeningDay };
 
 export type MenuImage = {
   id: string;
@@ -14,10 +21,14 @@ export type MenuItem = {
   description: string;
   details: string;
   priceCents: number;
+  /** Shown on the published menu. Hiding a dish is a draft change. */
   available: boolean;
   images: MenuImage[];
   video?: ExternalVideo;
   ingredients: string[];
+  /** `undefined` = not documented yet, `[]` = none of the 14 major allergens. */
+  allergens?: AllergenKey[];
+  tags: DishTagKey[];
   pairingName: string;
   pairingPriceCents?: number;
   reviewRating?: number;
@@ -43,7 +54,9 @@ export type Venue = {
   description: string;
   address: string;
   phone: string;
+  /** Free-text hours, kept for venues that never filled `openingHours`. */
   hours: string;
+  openingHours?: OpeningDay[];
   accentColor: string;
   logoDataUrl?: string;
   coverImageDataUrl?: string;
@@ -58,15 +71,37 @@ export type MenuSnapshot = {
   version: number;
 };
 
+/** Suggestion of the day: live, outside the draft/publish cycle. */
+export type DailySpecial = {
+  id: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  imageUrl?: string;
+  /** Storage id of the photo (remote mode), needed to keep it on update. */
+  imageStorageId?: string;
+  endsAt: number;
+};
+
+/** Service data applied to the public menu immediately, without publishing. */
+export type LiveService = {
+  soldOutIds: string[];
+  autoRestock: boolean;
+  special?: DailySpecial;
+};
+
 export type MenuState = {
   venue: Venue;
   categories: MenuCategory[];
   published?: MenuSnapshot;
   changedAt: number;
+  live: LiveService;
 };
 
 export const STORAGE_KEY = "menushare.demo.v1";
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+export const DEMO_VENUE_ID = "venue-demo";
+export const DEMO_POPULAR_IDS = ["burrata", "tagliatelle", "tiramisu", "vongole"];
 export const RESERVED_SLUGS = new Set([
   "api",
   "dashboard",
@@ -77,10 +112,14 @@ export const RESERVED_SLUGS = new Set([
   "support",
 ]);
 
+export function emptyLiveService(): LiveService {
+  return { soldOutIds: [], autoRestock: true };
+}
+
 export function slugify(value: string) {
   return value
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
@@ -104,10 +143,27 @@ export function formatPrice(priceCents: number) {
   }).format(priceCents / 100);
 }
 
+/** Price typed by an owner ("12,50"); an empty value is rejected. */
 export function parsePriceToCents(value: string) {
-  const amount = Number(value.trim().replace(",", "."));
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error("INVALID_PRICE");
+  const amount = Number(trimmed.replace(",", "."));
   if (!Number.isFinite(amount) || amount < 0) throw new Error("INVALID_PRICE");
   return Math.round(amount * 100);
+}
+
+/** Cents back to the French input format ("12,5" → "12,50"). */
+export function priceToInput(priceCents: number | undefined) {
+  if (priceCents === undefined) return "";
+  return (priceCents / 100)
+    .toFixed(priceCents % 100 === 0 ? 0 : 2)
+    .replace(".", ",");
+}
+
+export function videoToUrl(video: ExternalVideo) {
+  return video.provider === "youtube"
+    ? `https://youtu.be/${video.externalId}`
+    : `https://vimeo.com/${video.externalId}`;
 }
 
 export function createItem(input: {
@@ -118,6 +174,8 @@ export function createItem(input: {
   price: string;
   videoUrl?: string;
   ingredients?: string[];
+  allergens?: AllergenKey[];
+  tags?: DishTagKey[];
   pairingName?: string;
   pairingPrice?: string;
   reviewRating?: number;
@@ -139,6 +197,8 @@ export function createItem(input: {
       : undefined,
     ingredients:
       input.ingredients?.map((value) => value.trim()).filter(Boolean) ?? [],
+    allergens: input.allergens,
+    tags: input.tags ?? [],
     pairingName: input.pairingName?.trim() ?? "",
     pairingPriceCents: input.pairingPrice?.trim()
       ? parsePriceToCents(input.pairingPrice)
@@ -157,6 +217,16 @@ export function move<T>(items: T[], from: number, to: number) {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+/** Applies an explicit order of ids; unknown or missing ids keep the list. */
+export function reorderById<T extends { id: string }>(items: T[], ids: string[]) {
+  if (
+    ids.length !== items.length ||
+    items.some((item) => !ids.includes(item.id))
+  )
+    return items;
+  return ids.map((id) => items.find((item) => item.id === id)!);
 }
 
 function cloneSnapshotSource(state: MenuState) {
@@ -202,10 +272,12 @@ export function createVenueState(input: {
       address: "",
       phone: "",
       hours: "",
+      openingHours: [],
       accentColor: "#76263c",
     },
     categories: [],
     changedAt: now,
+    live: emptyLiveService(),
   };
 }
 
@@ -222,17 +294,27 @@ export function createEmptyState(now = Date.now()): MenuState {
       address: "",
       phone: "",
       hours: "",
+      openingHours: [],
       accentColor: "#76263c",
     },
     categories: [],
     changedAt: now,
+    live: emptyLiveService(),
   };
+}
+
+const LUNCH = { open: "12:00", close: "14:30" };
+const DINNER = { open: "19:00", close: "22:30" };
+const LATE_DINNER = { open: "19:00", close: "23:00" };
+
+function demoImage(id: string, alt: string): MenuImage[] {
+  return [{ id: `${id}-cover`, dataUrl: `/demo/${id}.jpg`, alt }];
 }
 
 export function createDemoState(now = 1_786_000_000_000): MenuState {
   const state: MenuState = {
     venue: {
-      id: "venue-demo",
+      id: DEMO_VENUE_ID,
       slug: "nonna-lydie",
       name: "Nonna Lydie",
       kind: "Trattoria",
@@ -240,11 +322,20 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
       tagline: "Pâtes fraîches maison, sauces mijotées, produits d’Italie.",
       description:
         "Chez Nonna Lydie, on cuisine comme à la maison : pâtes fraîches roulées le matin, sauces mijotées lentement et produits venus directement d’Italie.",
-      address: "12 rue des Remparts, Bordeaux",
+      address: "12 rue des Remparts, 33000 Bordeaux",
       phone: "05 56 00 00 00",
-      hours: "Mardi — Samedi · 12h—14h30 & 19h—22h30",
+      hours: "Fermé le dimanche et le lundi.",
+      openingHours: [
+        { day: 1, ranges: [LUNCH, DINNER] },
+        { day: 2, ranges: [LUNCH, DINNER] },
+        { day: 3, ranges: [LUNCH, DINNER] },
+        { day: 4, ranges: [LUNCH, LATE_DINNER] },
+        { day: 5, ranges: [LUNCH, LATE_DINNER] },
+      ],
       accentColor: "#76263c",
+      coverImageDataUrl: "/demo/cover.jpg",
       coverVideo: normalizeExternalVideoUrl("https://youtu.be/dQw4w9WgXcQ"),
+      tableCount: 12,
     },
     categories: [
       {
@@ -268,6 +359,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
               "Fleur de sel",
               "Poivre du moulin",
             ],
+            allergens: ["lait"],
+            tags: ["vegetarien"],
             pairingName: "Verre de Vermentino di Sardegna",
             pairingPrice: "7",
             reviewRating: 4.9,
@@ -275,13 +368,26 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             reviewQuote:
               "Une burrata d’une fraîcheur incroyable, comme en Italie.",
             reviewAuthor: "Chiara F.",
-            images: [
-              {
-                id: "burrata-cover",
-                dataUrl: "/demo-burrata.jpg",
-                alt: "Burrata Pugliese, tomates marinées et basilic",
-              },
+            images: demoImage(
+              "burrata",
+              "Burrata Pugliese, tomates marinées et basilic",
+            ),
+          }),
+          createItem({
+            id: "caprese",
+            name: "Caprese di Bufala",
+            description:
+              "Mozzarella di bufala, tomates anciennes, pesto de basilic.",
+            price: "12",
+            ingredients: [
+              "Mozzarella di bufala",
+              "Tomates anciennes",
+              "Pesto",
+              "Pignons de pin",
             ],
+            allergens: ["lait", "fruits-a-coque"],
+            tags: ["vegetarien", "nouveau"],
+            images: demoImage("caprese", "Caprese di bufala et tomates"),
           }),
           createItem({
             id: "vitello",
@@ -289,6 +395,15 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             description:
               "Veau rosé en fines tranches, crème de thon et câpres.",
             price: "13",
+            allergens: ["poisson", "oeufs", "moutarde"],
+          }),
+          createItem({
+            id: "arancini",
+            name: "Arancini al Ragù",
+            description:
+              "Boulettes de riz croustillantes, cœur ragù et mozzarella.",
+            price: "9",
+            tags: ["fait-maison"],
           }),
         ],
       },
@@ -302,8 +417,30 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             name: "Tagliatelle al Tartufo",
             description:
               "Pâtes fraîches du jour, crème de truffe, parmesan 24 mois.",
+            details:
+              "Nos tagliatelle sont roulées chaque matin, puis nappées d’une crème à la truffe noire et d’un parmesan affiné 24 mois.",
             price: "24",
             videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            ingredients: [
+              "Pâtes fraîches aux œufs",
+              "Truffe noire",
+              "Crème",
+              "Parmesan 24 mois",
+            ],
+            allergens: ["gluten", "oeufs", "lait"],
+            tags: ["vegetarien", "signature"],
+            pairingName: "Verre de Chianti Classico",
+            pairingPrice: "8",
+            images: demoImage("tagliatelle", "Tagliatelle à la truffe"),
+          }),
+          createItem({
+            id: "vongole",
+            name: "Spaghetti alle Vongole",
+            description: "Palourdes, ail, piment doux, persil plat, vin blanc.",
+            price: "22",
+            allergens: ["gluten", "mollusques", "sulfites"],
+            tags: ["epice"],
+            images: demoImage("vongole", "Spaghetti aux palourdes"),
           }),
           createItem({
             id: "lasagne",
@@ -311,6 +448,17 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             description:
               "Ragù de bœuf mijoté 6 h, béchamel et mozzarella gratinée.",
             price: "19",
+            allergens: ["gluten", "oeufs", "lait", "celeri"],
+            tags: ["fait-maison"],
+            images: demoImage("lasagne", "Lasagne gratinées"),
+          }),
+          createItem({
+            id: "polpette",
+            name: "Polpette al Sugo",
+            description: "Boulettes de bœuf et veau, sauce tomate, focaccia.",
+            price: "17",
+            allergens: ["gluten", "oeufs", "lait"],
+            images: demoImage("polpette", "Boulettes à la sauce tomate"),
           }),
           createItem({
             id: "osso-buco",
@@ -331,6 +479,18 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             description:
               "Mascarpone monté minute, biscuits imbibés d’espresso.",
             price: "9",
+            allergens: ["gluten", "oeufs", "lait"],
+            tags: ["vegetarien", "fait-maison"],
+            images: demoImage("tiramisu", "Tiramisù"),
+          }),
+          createItem({
+            id: "panna-cotta",
+            name: "Panna Cotta ai Frutti Rossi",
+            description: "Crème vanille de Madagascar, coulis de fruits rouges.",
+            price: "8",
+            allergens: ["lait"],
+            tags: ["vegetarien"],
+            images: demoImage("pannacotta", "Panna cotta aux fruits rouges"),
           }),
           createItem({
             id: "cannoli",
@@ -338,13 +498,74 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             description:
               "Coques croustillantes, ricotta de brebis, pistache de Bronte.",
             price: "8",
+            allergens: ["gluten", "lait", "fruits-a-coque"],
+            tags: ["vegetarien"],
+          }),
+        ],
+      },
+      {
+        id: "bevande",
+        name: "À boire",
+        eyebrow: "Vins & boissons",
+        items: [
+          createItem({
+            id: "vermentino",
+            name: "Vermentino di Sardegna",
+            description: "Blanc · verre 12 cl",
+            price: "7",
+            allergens: ["sulfites"],
+            tags: ["vegan"],
+          }),
+          createItem({
+            id: "chianti",
+            name: "Chianti Classico DOCG",
+            description: "Rouge · verre 12 cl",
+            price: "8",
+            allergens: ["sulfites"],
+            tags: ["vegan"],
+          }),
+          createItem({
+            id: "limonata",
+            name: "Limonata maison",
+            description: "Citrons de Sicile, menthe fraîche.",
+            price: "5",
+            allergens: [],
+            tags: ["vegan", "fait-maison"],
           }),
         ],
       },
     ],
     changedAt: now,
+    live: {
+      soldOutIds: ["arancini"],
+      autoRestock: true,
+      special: {
+        id: "special-demo",
+        name: "Risotto ai Porcini",
+        description: "Cèpes poêlés, parmesan 24 mois, beurre noisette.",
+        priceCents: 2300,
+        // Far in the future: the demo special never expires on its own.
+        endsAt: 4_102_444_800_000,
+      },
+    },
   };
   return publishMenu(state, now);
+}
+
+function withItemDefaults(item: MenuItem): MenuItem {
+  return {
+    ...item,
+    details: item.details ?? "",
+    ingredients: item.ingredients ?? [],
+    tags: item.tags ?? [],
+    pairingName: item.pairingName ?? "",
+    reviewQuote: item.reviewQuote ?? "",
+    reviewAuthor: item.reviewAuthor ?? "",
+  };
+}
+
+function withCategoryDefaults(category: MenuCategory): MenuCategory {
+  return { ...category, items: category.items.map(withItemDefaults) };
 }
 
 export function hydrateMenuState(value: unknown): MenuState {
@@ -352,28 +573,25 @@ export function hydrateMenuState(value: unknown): MenuState {
   const candidate = value as Partial<MenuState>;
   if (!candidate.venue?.slug || !Array.isArray(candidate.categories))
     return createDemoState();
-  const withDefaults = (item: MenuItem): MenuItem => ({
-    ...item,
-    details: item.details ?? "",
-    ingredients: item.ingredients ?? [],
-    pairingName: item.pairingName ?? "",
-    reviewQuote: item.reviewQuote ?? "",
-    reviewAuthor: item.reviewAuthor ?? "",
-  });
+  const live = candidate.live;
   return {
     ...(candidate as MenuState),
-    categories: candidate.categories.map((category) => ({
-      ...category,
-      items: category.items.map(withDefaults),
-    })),
+    venue: { ...candidate.venue, openingHours: candidate.venue.openingHours ?? [] },
+    categories: candidate.categories.map(withCategoryDefaults),
     published: candidate.published
       ? {
           ...candidate.published,
-          categories: candidate.published.categories.map((category) => ({
-            ...category,
-            items: category.items.map(withDefaults),
-          })),
+          venue: {
+            ...candidate.published.venue,
+            openingHours: candidate.published.venue.openingHours ?? [],
+          },
+          categories: candidate.published.categories.map(withCategoryDefaults),
         }
       : undefined,
+    live: {
+      soldOutIds: Array.isArray(live?.soldOutIds) ? live.soldOutIds : [],
+      autoRestock: live?.autoRestock ?? true,
+      special: live?.special,
+    },
   };
 }
