@@ -75,6 +75,9 @@ export type DailySpecial = {
   description: string;
   priceCents: number;
   imageUrl?: string;
+  /** Extra media used by the local demonstration. */
+  images?: MenuImage[];
+  video?: ExternalVideo;
   /** Storage id of the photo (remote mode), needed to keep it on update. */
   imageStorageId?: string;
   endsAt: number;
@@ -95,6 +98,8 @@ export type MenuState = {
   live: LiveService;
   history?: MenuSnapshot[];
   previousSlugs?: string[];
+  /** Updates bundled demo media once, without resetting local edits. */
+  demoMediaVersion?: number;
 };
 
 export const STORAGE_KEY = "menushare.demo.v1";
@@ -318,12 +323,21 @@ export function createEmptyState(now = Date.now()): MenuState {
   };
 }
 
+const DEMO_MEDIA_VERSION = 1;
+
 const LUNCH = { open: "12:00", close: "14:30" };
 const DINNER = { open: "19:00", close: "22:30" };
 const LATE_DINNER = { open: "19:00", close: "23:00" };
 
-function demoImage(id: string, alt: string): MenuImage[] {
-  return [{ id: `${id}-cover`, dataUrl: `/demo/${id}.jpg`, alt }];
+function demoImages(id: string, alt: string): MenuImage[] {
+  return [
+    { id: `${id}-cover`, dataUrl: `/demo/${id}.jpg`, alt },
+    {
+      id: `${id}-gallery`,
+      dataUrl: `/demo/${id}-gallery.jpg`,
+      alt: `${alt} — autre présentation`,
+    },
+  ];
 }
 
 export function createDemoState(now = 1_786_000_000_000): MenuState {
@@ -349,7 +363,7 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
       ],
       accentColor: "#76263c",
       coverImageDataUrl: "/demo/cover.jpg",
-      coverVideo: normalizeExternalVideoUrl("https://youtu.be/dQw4w9WgXcQ"),
+      coverVideo: normalizeExternalVideoUrl("https://youtu.be/zlWvcPajgIE"),
       tableCount: 12,
     },
     categories: [
@@ -383,10 +397,11 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             reviewQuote:
               "Une burrata d’une fraîcheur incroyable, comme en Italie.",
             reviewAuthor: "Chiara F.",
-            images: demoImage(
+            images: demoImages(
               "burrata",
               "Burrata Pugliese, tomates marinées et basilic",
             ),
+            videoUrl: "https://youtu.be/xj6Jt2SzPZA",
           }),
           createItem({
             id: "caprese",
@@ -402,7 +417,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             ],
             allergens: ["lait", "fruits-a-coque"],
             tags: ["vegetarien", "nouveau"],
-            images: demoImage("caprese", "Caprese di bufala et tomates"),
+            images: demoImages("caprese", "Caprese di bufala et tomates"),
+            videoUrl: "https://youtu.be/pgLhokt0uAQ",
           }),
           createItem({
             id: "vitello",
@@ -411,6 +427,11 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
               "Veau rosé en fines tranches, crème de thon et câpres.",
             price: "13",
             allergens: ["poisson", "oeufs", "moutarde"],
+            videoUrl: "https://youtu.be/GKdxwtcI4Ho",
+            images: demoImages(
+              "vitello",
+              "Vitello tonnato, crème de thon et câpres",
+            ),
           }),
           createItem({
             id: "arancini",
@@ -419,6 +440,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
               "Boulettes de riz croustillantes, cœur ragù et mozzarella.",
             price: "9",
             tags: ["fait-maison"],
+            videoUrl: "https://youtu.be/6K07E9WQO4c",
+            images: demoImages("arancini", "Arancini au ragù"),
           }),
         ],
       },
@@ -435,7 +458,6 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             details:
               "Nos tagliatelle sont roulées chaque matin, puis nappées d’une crème à la truffe noire et d’un parmesan affiné 24 mois.",
             price: "24",
-            videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
             ingredients: [
               "Pâtes fraîches aux œufs",
               "Truffe noire",
@@ -446,7 +468,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             tags: ["vegetarien", "signature"],
             pairingName: "Verre de Chianti Classico",
             pairingPrice: "8",
-            images: demoImage("tagliatelle", "Tagliatelle à la truffe"),
+            images: demoImages("tagliatelle", "Tagliatelle à la truffe"),
+            videoUrl: "https://youtu.be/zlWvcPajgIE",
           }),
           createItem({
             id: "vongole",
@@ -455,7 +478,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "22",
             allergens: ["gluten", "mollusques", "sulfites"],
             tags: ["epice"],
-            images: demoImage("vongole", "Spaghetti aux palourdes"),
+            images: demoImages("vongole", "Spaghetti aux palourdes"),
+            videoUrl: "https://youtu.be/9V-tb5z5_K8",
           }),
           createItem({
             id: "lasagne",
@@ -465,7 +489,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "19",
             allergens: ["gluten", "oeufs", "lait", "celeri"],
             tags: ["fait-maison"],
-            images: demoImage("lasagne", "Lasagne gratinées"),
+            images: demoImages("lasagne", "Lasagne gratinées"),
+            videoUrl: "https://youtu.be/wxrH-WS59Us",
           }),
           createItem({
             id: "polpette",
@@ -473,13 +498,16 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             description: "Boulettes de bœuf et veau, sauce tomate, focaccia.",
             price: "17",
             allergens: ["gluten", "oeufs", "lait"],
-            images: demoImage("polpette", "Boulettes à la sauce tomate"),
+            images: demoImages("polpette", "Boulettes à la sauce tomate"),
+            videoUrl: "https://youtu.be/6pdOWsH7qnI",
           }),
           createItem({
             id: "osso-buco",
             name: "Osso Buco alla Milanese",
             description: "Jarret de veau confit, gremolata et risotto safrané.",
             price: "27",
+            videoUrl: "https://youtu.be/bVi4LC9Ufmk",
+            images: demoImages("osso-buco", "Osso buco et risotto"),
           }),
         ],
       },
@@ -496,7 +524,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "9",
             allergens: ["gluten", "oeufs", "lait"],
             tags: ["vegetarien", "fait-maison"],
-            images: demoImage("tiramisu", "Tiramisù"),
+            images: demoImages("tiramisu", "Tiramisù"),
+            videoUrl: "https://youtu.be/9YCaRsHE8g4",
           }),
           createItem({
             id: "panna-cotta",
@@ -506,7 +535,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "8",
             allergens: ["lait"],
             tags: ["vegetarien"],
-            images: demoImage("pannacotta", "Panna cotta aux fruits rouges"),
+            images: demoImages("pannacotta", "Panna cotta aux fruits rouges"),
+            videoUrl: "https://youtu.be/MIxHyblyhu8",
           }),
           createItem({
             id: "cannoli",
@@ -516,6 +546,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "8",
             allergens: ["gluten", "lait", "fruits-a-coque"],
             tags: ["vegetarien"],
+            videoUrl: "https://youtu.be/hGU5c_QUHAM",
+            images: demoImages("cannoli", "Cannoli siciliens à la ricotta"),
           }),
         ],
       },
@@ -531,6 +563,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "7",
             allergens: ["sulfites"],
             tags: ["vegan"],
+            videoUrl: "https://youtu.be/Xe5zKJu92eA",
+            images: demoImages("vermentino", "Vermentino di Sardegna"),
           }),
           createItem({
             id: "chianti",
@@ -539,6 +573,8 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "8",
             allergens: ["sulfites"],
             tags: ["vegan"],
+            videoUrl: "https://youtu.be/kxz8bR6L730",
+            images: demoImages("chianti", "Chianti Classico"),
           }),
           createItem({
             id: "limonata",
@@ -547,11 +583,14 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
             price: "5",
             allergens: [],
             tags: ["vegan", "fait-maison"],
+            videoUrl: "https://youtu.be/8Bgy20LcOHI",
+            images: demoImages("limonata", "Limonade au citron et à la menthe"),
           }),
         ],
       },
     ],
     changedAt: now,
+    demoMediaVersion: DEMO_MEDIA_VERSION,
     live: {
       soldOutIds: ["arancini"],
       autoRestock: true,
@@ -560,6 +599,9 @@ export function createDemoState(now = 1_786_000_000_000): MenuState {
         name: "Risotto ai Porcini",
         description: "Cèpes poêlés, parmesan 24 mois, beurre noisette.",
         priceCents: 2300,
+        imageUrl: "/demo/risotto.jpg",
+        images: demoImages("risotto", "Risotto aux cèpes et parmesan"),
+        video: normalizeExternalVideoUrl("https://youtu.be/PNPTJOPHSqE"),
         // Far in the future: the demo special never expires on its own.
         endsAt: 4_102_444_800_000,
       },
@@ -590,7 +632,7 @@ export function hydrateMenuState(value: unknown): MenuState {
   if (!candidate.venue?.slug || !Array.isArray(candidate.categories))
     return createDemoState();
   const live = candidate.live;
-  return {
+  const state: MenuState = {
     ...(candidate as MenuState),
     venue: {
       ...candidate.venue,
@@ -611,6 +653,81 @@ export function hydrateMenuState(value: unknown): MenuState {
       soldOutIds: Array.isArray(live?.soldOutIds) ? live.soldOutIds : [],
       autoRestock: live?.autoRestock ?? true,
       special: live?.special,
+    },
+  };
+  return upgradeDemoMedia(state);
+}
+
+function upgradeDemoMedia(state: MenuState): MenuState {
+  if (
+    state.venue.id !== DEMO_VENUE_ID ||
+    (state.demoMediaVersion ?? 0) >= DEMO_MEDIA_VERSION
+  )
+    return state;
+
+  const demo = createDemoState();
+  const originals = new Map(
+    demo.categories.flatMap((category) =>
+      category.items.map((item) => [item.id, item] as const),
+    ),
+  );
+  const updateCategories = (categories: MenuCategory[]) =>
+    categories.map((category) => ({
+      ...category,
+      items: category.items.map((item) => {
+        const original = originals.get(item.id);
+        if (!original || item.name !== original.name) return item;
+        const cover = original.images[0];
+        const oldImages =
+          item.images.length === 0 ||
+          (item.images.length === 1 &&
+            item.images[0].id === cover.id &&
+            item.images[0].dataUrl === cover.dataUrl &&
+            item.images[0].alt === cover.alt);
+        return {
+          ...item,
+          images: oldImages ? structuredClone(original.images) : item.images,
+          video:
+            !item.video || item.video.externalId === "dQw4w9WgXcQ"
+              ? original.video
+              : item.video,
+        };
+      }),
+    }));
+  const updateVenue = (venue: Venue): Venue => ({
+    ...venue,
+    coverVideo:
+      venue.coverVideo?.externalId === "dQw4w9WgXcQ"
+        ? demo.venue.coverVideo
+        : venue.coverVideo,
+  });
+  const special = state.live.special;
+  const demoSpecial = demo.live.special!;
+  return {
+    ...state,
+    demoMediaVersion: DEMO_MEDIA_VERSION,
+    venue: updateVenue(state.venue),
+    categories: updateCategories(state.categories),
+    published: state.published
+      ? {
+          ...state.published,
+          venue: updateVenue(state.published.venue),
+          categories: updateCategories(state.published.categories),
+        }
+      : undefined,
+    live: {
+      ...state.live,
+      special:
+        special?.id === demoSpecial.id &&
+        special.name === demoSpecial.name &&
+        !special.imageUrl
+          ? {
+              ...special,
+              imageUrl: demoSpecial.imageUrl,
+              images: special.images ?? structuredClone(demoSpecial.images),
+              video: special.video ?? demoSpecial.video,
+            }
+          : special,
     },
   };
 }

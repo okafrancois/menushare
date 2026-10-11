@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { contrastRatio, readableInk, safeAccent } from "@/lib/color";
 import { createDemoState } from "@/lib/menu-domain";
-import { completionCounts, expectsPhoto, isIncomplete } from "@/lib/menu-quality";
+import {
+  completionCounts,
+  expectsPhoto,
+  isIncomplete,
+} from "@/lib/menu-quality";
 
 describe("complétude de la carte", () => {
   it("n’attend pas de photo pour les boissons", () => {
@@ -18,9 +22,9 @@ describe("complétude de la carte", () => {
 
   it("compte les plats sans photo et sans allergènes de la démo", () => {
     expect(completionCounts(createDemoState().categories)).toEqual({
-      withoutPhoto: 4,
+      withoutPhoto: 0,
       withoutAllergens: 2,
-      incomplete: 4,
+      incomplete: 2,
     });
   });
 

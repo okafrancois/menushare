@@ -194,3 +194,94 @@ describe("état initial et hydratation", () => {
     expect(demo.published?.version).toBe(1);
   });
 });
+
+describe("mise à jour des médias des anciennes démos", () => {
+  function legacyDemo() {
+    const state = createDemoState(100);
+    delete state.demoMediaVersion;
+    const placeholder = createItem({
+      id: "old-video",
+      name: "Ancienne vidéo",
+      price: "0",
+      videoUrl: "https://youtu.be/dQw4w9WgXcQ",
+    }).video;
+    for (const source of [state, state.published!]) {
+      source.venue.coverVideo = placeholder;
+      for (const item of source.categories.flatMap(
+        (category) => category.items,
+      )) {
+        item.images = item.id === "burrata" ? item.images.slice(0, 1) : [];
+        item.video = item.id === "tagliatelle" ? placeholder : undefined;
+      }
+    }
+    delete state.live.special!.imageUrl;
+    delete state.live.special!.images;
+    delete state.live.special!.video;
+    return state;
+  }
+
+  it("complète le brouillon et la publication sans changer le service ni publier", () => {
+    const legacy = legacyDemo();
+    legacy.categories[0].items[0].priceCents = 1500;
+    const hydrated = hydrateMenuState(legacy);
+    for (const source of [hydrated, hydrated.published!]) {
+      for (const item of source.categories.flatMap(
+        (category) => category.items,
+      )) {
+        expect(item.images).toHaveLength(2);
+        expect(new Set(item.images.map((image) => image.dataUrl)).size).toBe(2);
+        expect(item.video?.provider).toBe("youtube");
+        expect(item.video?.externalId).not.toBe("dQw4w9WgXcQ");
+      }
+    }
+    expect(hydrated.categories[0].items[0].priceCents).toBe(1500);
+    expect(hydrated.published!.categories[0].items[0].priceCents).toBe(1400);
+    expect(hydrated.changedAt).toBe(100);
+    expect(hydrated.published!.version).toBe(1);
+    expect(hydrated.published!.publishedAt).toBe(100);
+    expect(hydrated.live.soldOutIds).toEqual(["arancini"]);
+    expect(hydrated.live.special!.images).toHaveLength(2);
+    expect(hydrated.live.special!.video).toBeDefined();
+  });
+
+  it("préserve les médias personnalisés, les plats renommés et les suppressions", () => {
+    const legacy = legacyDemo();
+    const custom = createItem({
+      id: "custom",
+      name: "Pasta",
+      price: "15",
+      images: [
+        { id: "custom-photo", dataUrl: "/my-photo.jpg", alt: "Ma photo" },
+      ],
+      videoUrl: "https://vimeo.com/76979871",
+    });
+    const burrata = legacy.categories[0].items[0];
+    burrata.images = custom.images;
+    burrata.video = custom.video;
+    legacy.categories[0].items[1].name = "Ma caprese";
+    legacy.categories[0].items.pop();
+    legacy.live.special!.imageUrl = "/my-special.jpg";
+    const hydrated = hydrateMenuState(legacy);
+    expect(hydrated.categories[0].items[0].images).toEqual(custom.images);
+    expect(hydrated.categories[0].items[0].video).toEqual(custom.video);
+    expect(hydrated.categories[0].items[1].images).toEqual([]);
+    expect(hydrated.categories[0].items[1].video).toBeUndefined();
+    expect(hydrated.categories[0].items).toHaveLength(3);
+    expect(hydrated.live.special).toEqual(legacy.live.special);
+  });
+
+  it("ne rétablit pas des médias retirés après la mise à jour", () => {
+    const updated = hydrateMenuState(legacyDemo());
+    updated.categories[0].items[0].images = [];
+    delete updated.categories[0].items[0].video;
+    const hydrated = hydrateMenuState(updated);
+    expect(hydrated.categories[0].items[0].images).toEqual([]);
+    expect(hydrated.categories[0].items[0].video).toBeUndefined();
+  });
+
+  it("laisse les autres établissements tels quels", () => {
+    const legacy = legacyDemo();
+    legacy.venue.id = "my-venue";
+    expect(hydrateMenuState(legacy)).toEqual(legacy);
+  });
+});

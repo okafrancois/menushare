@@ -275,15 +275,18 @@ function specialToDish(special: DailySpecial): SheetDish {
     details: special.description,
     priceCents: special.priceCents,
     available: true,
-    images: special.imageUrl
-      ? [
-          {
-            id: `special-image-${special.id}`,
-            dataUrl: special.imageUrl,
-            alt: special.name,
-          },
-        ]
-      : [],
+    video: special.video,
+    images:
+      special.images ??
+      (special.imageUrl
+        ? [
+            {
+              id: `special-image-${special.id}`,
+              dataUrl: special.imageUrl,
+              alt: special.name,
+            },
+          ]
+        : []),
     ingredients: [],
     tags: [],
     allergens: undefined,
@@ -931,6 +934,12 @@ export function PublishedMenu({
           <p>
             <Link href="/privacy">Confidentialité et préférences</Link> ·{" "}
             <Link href="/help">Aide</Link>
+            {venue.id === DEMO_VENUE_ID ? (
+              <>
+                {" · "}
+                <a href="/demo/credits.html">Crédits des photos</a>
+              </>
+            ) : null}
           </p>
         </footer>
       </div>
