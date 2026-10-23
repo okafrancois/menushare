@@ -9,10 +9,9 @@ import {
 } from "@/components/menu/menu-tracker";
 import { playerApiUrl } from "@/lib/menu-analytics";
 import type { ExternalVideo } from "@/lib/menu-domain";
-import { usePrivacyPreference } from "@/lib/privacy-preferences";
-import { useState } from "react";
-import Link from "next/link";
 
+// Mounted only after a playback action: the dish's Play button or the cover
+// video button. Browsing the menu never loads a third-party player.
 export function VideoFrame({
   title,
   video,
@@ -23,42 +22,6 @@ export function VideoFrame({
   video: ExternalVideo;
   itemId?: string;
   autoplay?: boolean;
-}) {
-  const allowed = usePrivacyPreference("videos");
-  const [once, setOnce] = useState(false);
-  if (!allowed && !once)
-    return (
-      <div className="video-permission">
-        <strong>
-          Lire avec {video.provider === "youtube" ? "YouTube" : "Vimeo"}
-        </strong>
-        <p>Le lecteur externe recevra vos informations de connexion.</p>
-        <button className="pm-btn primary" onClick={() => setOnce(true)}>
-          Lire cette vidéo
-        </button>
-        <Link href="/privacy">Gérer mes préférences</Link>
-      </div>
-    );
-  return (
-    <AllowedVideoFrame
-      title={title}
-      video={video}
-      itemId={itemId}
-      autoplay={autoplay}
-    />
-  );
-}
-
-function AllowedVideoFrame({
-  title,
-  video,
-  itemId,
-  autoplay,
-}: {
-  title: string;
-  video: ExternalVideo;
-  itemId?: string;
-  autoplay: boolean;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { enabled } = useMenuTracker();

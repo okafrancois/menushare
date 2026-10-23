@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 export const PRIVACY_KEY = "menushare.privacy.v1";
 const EVENT = "menushare-privacy";
 const LIFETIME = 180 * 24 * 60 * 60 * 1000;
-type Preference = "analytics" | "videos";
+type Preference = "analytics";
 function read(key: Preference) {
   try {
     const data = JSON.parse(localStorage.getItem(PRIVACY_KEY) ?? "null");
@@ -47,8 +47,6 @@ export function useHasPrivacyChoice() {
 }
 export function setPrivacyPreference(key: Preference, enabled: boolean) {
   const preferences = {
-    analytics: read("analytics"),
-    videos: read("videos"),
     [key]: enabled,
     at: Date.now(),
   };

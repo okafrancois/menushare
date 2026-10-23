@@ -218,6 +218,11 @@ test("onboarding puis création complète d’un plat publié", async ({ page })
   );
   await page.getByRole("button", { name: "Voir Œufs bénédicte" }).click();
   const sheet = page.getByRole("dialog", { name: "Œufs bénédicte" });
+  await expect(sheet.locator(".pm-slide").first()).toHaveClass(/video/);
+  await expect(
+    sheet.getByRole("button", { name: "Lire la vidéo de Œufs bénédicte" }),
+  ).toBeInViewport();
+  await sheet.getByRole("button", { name: "Afficher le média 2" }).click();
   await expect(sheet.getByRole("img", { name: "oeufs.svg" })).toBeVisible();
   await expect(sheet).toContainText("Des œufs fermiers pochés minute");
   await expect(sheet).toContainText("Végétarien");
@@ -231,14 +236,66 @@ test("onboarding puis création complète d’un plat publié", async ({ page })
   await expect(sheet).toContainText("Le brunch parfait du dimanche.");
   await expect(page.getByRole("button", { name: "Commander" })).toHaveCount(0);
   await sheet.getByRole("button", { name: "Afficher le média 3" }).click();
+  await expect(
+    sheet.getByRole("img", { name: "oeufs-detail.svg" }),
+  ).toBeInViewport();
+  await sheet.getByRole("button", { name: "Afficher le média 1" }).click();
   await sheet
     .getByRole("button", { name: "Lire la vidéo de Œufs bénédicte" })
     .click();
-  await sheet.getByRole("button", { name: "Lire cette vidéo" }).click();
+  await expect(
+    sheet.getByRole("button", { name: "Lire cette vidéo" }),
+  ).toHaveCount(0);
   await expect(sheet.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /youtube-nocookie\.com\/embed/,
   );
+});
+
+test("vidéos : premier média et lecture directe sur mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    if (window.location.hostname !== "localhost") return;
+    localStorage.setItem(
+      "menushare.privacy.v1",
+      JSON.stringify({ analytics: false, videos: false, at: Date.now() }),
+    );
+  });
+  const externalRequests: string[] = [];
+  page.on("request", (request) => {
+    if (EXTERNAL_PLAYER_HOST.test(new URL(request.url()).hostname))
+      externalRequests.push(request.url());
+  });
+
+  await page.goto("/menu/nonna-lydie");
+  await page
+    .getByRole("region", { name: "Antipasti" })
+    .getByRole("button", { name: "Voir Burrata Pugliese" })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Burrata Pugliese" });
+  await expect(sheet.locator(".pm-slide").first()).toHaveClass(/video/);
+  const play = sheet.getByRole("button", {
+    name: "Lire la vidéo de Burrata Pugliese",
+  });
+  await expect(play).toBeInViewport();
+  await expect(page.getByTestId("video-frame")).toHaveCount(0);
+  expect(externalRequests).toEqual([]);
+
+  await play.click();
+  await expect(sheet.getByTestId("video-frame")).toHaveAttribute(
+    "src",
+    /youtube-nocookie\.com\/embed\/xj6Jt2SzPZA\?autoplay=1/,
+  );
+  await expect(page.getByText("Le lecteur externe recevra")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Lire cette vidéo" }),
+  ).toHaveCount(0);
+  await noHorizontalOverflow(page);
+
+  await sheet.getByRole("button", { name: "Fermer" }).click();
+  await expect(page.getByTestId("video-frame")).toHaveCount(0);
 });
 
 test("carte : ordre, rupture en direct, prix publié et suppression", async ({
@@ -416,7 +473,9 @@ test("apparence, logo, couverture et lecteur vidéo Vimeo", async ({ page }) => 
   await page
     .getByRole("button", { name: "Lire la vidéo de couverture" })
     .click();
-  await page.getByRole("button", { name: "Lire cette vidéo" }).click();
+  await expect(
+    page.getByRole("button", { name: "Lire cette vidéo" }),
+  ).toHaveCount(0);
   await expect(page.getByTestId("video-frame")).toHaveAttribute(
     "src",
     /player\.vimeo\.com\/video\/76979871/,

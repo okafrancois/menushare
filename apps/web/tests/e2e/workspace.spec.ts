@@ -179,15 +179,18 @@ test("les préférences de confidentialité restent facultatives et persistantes
   const statistics = page.getByRole("checkbox", {
     name: /Autoriser les statistiques/,
   });
-  const videos = page.getByRole("checkbox", { name: /Autoriser les lecteurs/ });
   await expect(statistics).not.toBeChecked();
-  await expect(videos).not.toBeChecked();
-  await videos.check();
+  await expect(
+    page.getByRole("checkbox", { name: /Autoriser les lecteurs/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(/Les lecteurs YouTube et Vimeo se chargent uniquement/),
+  ).toBeVisible();
+  await statistics.check();
   await page.reload();
-  await expect(videos).toBeChecked();
-  await videos.uncheck();
+  await expect(statistics).toBeChecked();
+  await statistics.uncheck();
   await page.reload();
-  await expect(videos).not.toBeChecked();
   await expect(statistics).not.toBeChecked();
 });
 

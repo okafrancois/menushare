@@ -9,11 +9,10 @@ import {
 } from "@/lib/privacy-preferences";
 export default function PrivacyPage() {
   const analytics = usePrivacyPreference("analytics");
-  const videos = usePrivacyPreference("videos");
   const [message, setMessage] = useState("");
-  function change(key: "analytics" | "videos", enabled: boolean) {
+  function change(enabled: boolean) {
     try {
-      setPrivacyPreference(key, enabled);
+      setPrivacyPreference("analytics", enabled);
       setMessage("Préférences enregistrées sur cet appareil.");
     } catch (error) {
       setMessage(
@@ -36,7 +35,7 @@ export default function PrivacyPage() {
           <input
             type="checkbox"
             checked={analytics}
-            onChange={(event) => change("analytics", event.target.checked)}
+            onChange={(event) => change(event.target.checked)}
           />
           <span>
             <strong>Autoriser les statistiques de consultation</strong>
@@ -45,21 +44,15 @@ export default function PrivacyPage() {
             le temps de lecture. Désactivé par défaut.
           </span>
         </label>
-        <label>
-          <input
-            type="checkbox"
-            checked={videos}
-            onChange={(event) => change("videos", event.target.checked)}
-          />
-          <span>
-            <strong>Autoriser les lecteurs YouTube et Vimeo</strong>
-            <br />
-            Ces services reçoivent des informations de connexion lors du
-            chargement de leurs lecteurs. Désactivé par défaut.
-          </span>
-        </label>
         <p role="status">{message}</p>
       </section>
+      <h2>Quand vous regardez une vidéo</h2>
+      <p>
+        Les lecteurs YouTube et Vimeo se chargent uniquement lorsque vous lancez
+        une vidéo. Ce clic ouvre directement le lecteur, sans confirmation
+        supplémentaire. Ces services reçoivent alors des informations de
+        connexion pour assurer la lecture.
+      </p>
       <h2>Quand vous consultez une carte</h2>
       <p>
         Votre sélection est conservée 12 heures dans ce navigateur. Le contexte

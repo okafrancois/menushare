@@ -52,8 +52,8 @@ export function DishSheet({
   const [slide, setSlide] = useState(0);
   const [playing, setPlaying] = useState(false);
   const slides = [
-    ...item.images.map((image) => ({ kind: "image" as const, image })),
     ...(item.video ? [{ kind: "video" as const }] : []),
+    ...item.images.map((image) => ({ kind: "image" as const, image })),
   ];
   const poster = item.images[0]?.dataUrl;
   const conflicts = allergenConflicts(item, avoid);

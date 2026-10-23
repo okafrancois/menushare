@@ -130,8 +130,9 @@ Les cartes sont en français, les prix en euros et les horaires à l’heure de 
   du compte. La suppression retire les cartes du public et purge les données par lots.
 - `/help`, `/terms` et `/privacy` expliquent les parcours du prototype. Le contact
   d’aide peut être renseigné via `NEXT_PUBLIC_SUPPORT_EMAIL`.
-- Les statistiques et lecteurs externes sont facultatifs. Les préférences sont
-  désactivées par défaut ; chaque vidéo peut aussi être autorisée individuellement.
+- Les statistiques restent facultatives et désactivées par défaut. Les vidéos
+  apparaissent en premier dans les fiches ; leurs lecteurs externes se chargent
+  uniquement au clic de lecture, sans confirmation supplémentaire.
 - Les grandes photos JPEG, PNG et WebP sont adaptées avant l’envoi (25 Mo maximum
   en entrée, 1 600 pixels et 2 Mo maximum après conversion).
 
