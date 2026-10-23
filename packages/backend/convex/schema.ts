@@ -61,7 +61,19 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_slug", ["slug"])
+    .index("by_logoStorageId", ["logoStorageId"])
+    .index("by_coverImageStorageId", ["coverImageStorageId"])
     .index("by_owner_status", ["ownerId", "status"]),
+
+  fileClaims: defineTable({
+    storageId: v.id("_storage"),
+    venueId: v.id("venues"),
+    usage: v.union(
+      v.literal("menu"),
+      v.literal("appearance"),
+      v.literal("special"),
+    ),
+  }).index("by_storageId", ["storageId"]),
 
   slugHistory: defineTable({
     venueId: v.id("venues"),
@@ -162,14 +174,18 @@ export default defineSchema({
     endsAt: v.number(),
     createdAt: v.number(),
     expiryJobId: v.optional(v.id("_scheduled_functions")),
-  }).index("by_venue", ["venueId"]),
+  })
+    .index("by_venue", ["venueId"])
+    .index("by_imageStorageId", ["imageStorageId"]),
 
   // Files removed from the draft while the published menu may still show
   // them; deleted at the next publication.
   pendingFileDeletions: defineTable({
     venueId: v.id("venues"),
     storageId: v.id("_storage"),
-  }).index("by_venue", ["venueId"]),
+  })
+    .index("by_venue", ["venueId"])
+    .index("by_storageId", ["storageId"]),
 
   // Daily counters, one row per venue/day and per dimension (dish, cover
   // video, table). Every KPI shown to owners is summed from these rows.

@@ -165,7 +165,11 @@ export const setDailySpecial = mutation({
       args.imageStorageId !== undefined &&
       args.imageStorageId === existing?.imageStorageId;
     if (args.imageStorageId && !keepsImage) {
-      await assertFreshUpload(ctx, args.imageStorageId, { requireImage: true });
+      await assertFreshUpload(ctx, args.imageStorageId, {
+        requireImage: true,
+        venueId: args.venueId,
+        usage: "special",
+      });
     }
 
     const fields = {

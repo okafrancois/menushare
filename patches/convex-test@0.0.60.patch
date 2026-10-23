@@ -1,0 +1,34 @@
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,3 +1,4 @@
++import { Buffer } from "node:buffer";
+ /// <reference types="vite/client" />
+ import { AsyncLocalStorage } from "node:async_hooks";
+ import { actionGeneric, getFunctionAddress, httpActionGeneric, makeFunctionReference, mutationGeneric, queryGeneric, } from "convex/server";
+@@ -1334,6 +1335,17 @@
+                 db.patch("_scheduled_functions", id, { state: { kind: "canceled" } });
+                 return JSON.stringify({});
+             }
++            // Convex 1.48 mutation storage protocol. Reuse the emulator's
++            // blob map and transactional _storage metadata. File transaction
++            // budgets are NOT emulated here.
++            case "1.0/storageGet": {
++                const blob = db.getFile(args.storageId);
++                if (blob === null) return JSON.stringify(null);
++                return JSON.stringify({
++                    blob: Buffer.from(await blob.arrayBuffer()).toString("base64"),
++                    contentType: blob.type || null,
++                });
++            }
+             case "1.0/storageDelete": {
+                 const { storageId } = args;
+                 await writeToDatabase(async (db) => {
+@@ -1394,6 +1406,7 @@
+                     return db.insert("_storage", {
+                         size: blob.size,
+                         sha256: await blobSha(blob),
++                        ...(blob.type ? { contentType: blob.type } : {}),
+                     });
+                 });
+                 db.storeFile(storageId, blob);

@@ -11,7 +11,7 @@ export const NOW = Date.UTC(2026, 9, 7, 12, 0);
 
 /** The module map built by `import.meta.glob` in each test file. */
 type Modules = Record<string, () => Promise<unknown>>;
-export type TestConvex = ReturnType<typeof convexTest>;
+export type TestConvex = ReturnType<typeof newConvexTest>;
 
 export function newConvexTest(modules: Modules) {
   const t = convexTest(schema, modules);
@@ -80,26 +80,29 @@ export async function createPublishedVenue(
   return { venueId, menuId, slug, categoryId, itemIds };
 }
 
-/**
- * Stores a file as a browser upload would. convex-test records no content
- * type, so metadata is written on the `_storage` document (tests only).
- */
+/** Store actual bytes and metadata through the emulator's action storage API. */
 export async function storeFile(
   t: TestConvex,
   metadata: { contentType?: string; size?: number } = {},
+  contents: BlobPart = "not an image",
 ) {
-  const storageId = await t.run((ctx) =>
-    ctx.storage.store(new Blob(["fake image"])),
-  );
-  if (Object.keys(metadata).length > 0) {
-    await t.run((ctx) => ctx.db.patch(storageId as never, metadata as never));
+  const blob = new Blob([contents], { type: metadata.contentType });
+  if (metadata.size !== undefined && metadata.size !== blob.size) {
+    throw new Error("Test file size must describe its actual bytes");
   }
-  return storageId;
+  return await t.run((ctx) => ctx.storage.store(blob));
 }
 
 export function storeImage(t: TestConvex, size?: number) {
-  return storeFile(t, {
-    contentType: "image/png",
-    ...(size === undefined ? {} : { size }),
-  });
+  const start = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">';
+  const end = "</svg>";
+  const padding = Math.max(
+    0,
+    (size ?? start.length + end.length) - start.length - end.length,
+  );
+  return storeFile(
+    t,
+    { contentType: "image/svg+xml", size },
+    start + " ".repeat(padding) + end,
+  );
 }

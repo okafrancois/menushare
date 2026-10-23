@@ -1,10 +1,9 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { imageMatchesContentType } from "./image";
 
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-// Files can only be attached right after their upload, so a storage
-// identifier obtained elsewhere cannot be used to claim (and later delete)
-// another venue's file.
+// Freshness limits initial adoption; it is not proof of file ownership.
 export const UPLOAD_MAX_AGE_MS = 60 * 60 * 1000;
 
 type FileMetadata = {
@@ -39,23 +38,98 @@ export async function deleteFileIfPresent(
   if (await ctx.db.system.get("_storage", storageId)) {
     await ctx.storage.delete(storageId);
   }
+  const claim = await ctx.db
+    .query("fileClaims")
+    .withIndex("by_storageId", (q) => q.eq("storageId", storageId))
+    .unique();
+  if (claim) await ctx.db.delete(claim._id);
 }
 
 /**
- * Throws INVALID_IMAGE unless `storageId` is a recent upload (and, when
- * required, an image of at most 2 MB). Rejected fresh uploads are deleted;
- * older files are left alone since they may belong to someone else.
+ * Called only after authorizing the destination venue. Adoption and validation
+ * commit together. A file may be shared within one usage at one venue, whose
+ * release paths know how to retain its other references.
+ * Refusals leave storage untouched: deleting then throwing would roll back,
+ * and a fresh id alone never authorizes deleting someone else's upload.
  */
 export async function assertFreshUpload(
   ctx: MutationCtx,
   storageId: Id<"_storage">,
-  options: { requireImage: boolean },
+  options: {
+    requireImage: boolean;
+    venueId: Id<"venues">;
+    usage: "menu" | "appearance" | "special";
+  },
 ) {
   const metadata = await ctx.db.system.get("_storage", storageId);
   const problem = uploadProblem(metadata, Date.now(), options);
-  if (!problem) return;
-  if (problem === "notImage") await ctx.storage.delete(storageId);
-  throw new Error("INVALID_IMAGE");
+  if (problem || !metadata) throw new Error("INVALID_IMAGE");
+  const claim = await ctx.db
+    .query("fileClaims")
+    .withIndex("by_storageId", (q) => q.eq("storageId", storageId))
+    .unique();
+  if (
+    claim &&
+    (claim.venueId !== options.venueId ||
+      claim.usage !== options.usage ||
+      options.usage === "special")
+  ) {
+    throw new Error("INVALID_IMAGE");
+  }
+
+  // Legacy references predate fileClaims. Indexed existence checks also
+  // protect files kept only by restorable publications (pending deletions).
+  if (!claim) {
+    const media = await ctx.db
+      .query("media")
+      .withIndex("by_imageStorageId", (q) => q.eq("imageStorageId", storageId))
+      .first();
+    const logo = await ctx.db
+      .query("venues")
+      .withIndex("by_logoStorageId", (q) => q.eq("logoStorageId", storageId))
+      .first();
+    const cover = await ctx.db
+      .query("venues")
+      .withIndex("by_coverImageStorageId", (q) =>
+        q.eq("coverImageStorageId", storageId),
+      )
+      .first();
+    const special = await ctx.db
+      .query("dailySpecials")
+      .withIndex("by_imageStorageId", (q) => q.eq("imageStorageId", storageId))
+      .first();
+    const pending = await ctx.db
+      .query("pendingFileDeletions")
+      .withIndex("by_storageId", (q) => q.eq("storageId", storageId))
+      .first();
+    // Existing appearance/special edits bypass initial adoption at the caller.
+    // Without a claim, no referenced legacy file is a new upload to adopt.
+    if (pending || media || logo || cover || special) {
+      throw new Error("INVALID_IMAGE");
+    }
+  }
+  if (options.requireImage) {
+    // Check metadata BEFORE downloading. Each call reads at most one 2 MiB
+    // blob; appearance adopts at most two, without scanning/decompressing pixels.
+    const blob = await ctx.storage.get(storageId);
+    if (
+      !blob ||
+      blob.size !== metadata.size ||
+      blob.size > MAX_IMAGE_BYTES ||
+      !imageMatchesContentType(
+        new Uint8Array(await blob.arrayBuffer()),
+        metadata.contentType ?? "",
+      )
+    ) {
+      throw new Error("INVALID_IMAGE");
+    }
+  }
+  if (!claim)
+    await ctx.db.insert("fileClaims", {
+      storageId,
+      venueId: options.venueId,
+      usage: options.usage,
+    });
 }
 
 const STORAGE_ID_KEY = /StorageId$/;

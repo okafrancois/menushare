@@ -23,5 +23,8 @@
     "prettier": "^3.7.4",
     "turbo": "^2.9.6",
     "typescript": "5.9.2"
+  },
+  "patchedDependencies": {
+    "convex-test@0.0.60": "patches/convex-test@0.0.60.patch"
   }
 }

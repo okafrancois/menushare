@@ -541,15 +541,18 @@ export const addItemImage = mutation({
     const category = await ctx.db.get(item.categoryId);
     if (!category) throw new Error("NOT_FOUND");
     const { venue } = await ownedMenuOrThrow(ctx, category.menuId);
-    await assertFreshUpload(ctx, storageId, { requireImage: true });
     const media = await ctx.db
       .query("media")
       .withIndex("by_item_order", (q) => q.eq("itemId", itemId))
       .take(20);
     if (media.filter((asset) => asset.kind === "image").length >= 8) {
-      await ctx.storage.delete(storageId);
       throw new Error("IMAGE_LIMIT_REACHED");
     }
+    await assertFreshUpload(ctx, storageId, {
+      requireImage: true,
+      venueId: venue._id,
+      usage: "menu",
+    });
     const mediaId = await ctx.db.insert("media", {
       venueId: venue._id,
       itemId,

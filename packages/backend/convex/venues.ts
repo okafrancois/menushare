@@ -236,13 +236,20 @@ export const updateAppearance = mutation({
     const { venue } = await ownedVenueOrThrow(ctx, args.venueId);
     // Re-sending the current file is allowed; any other file must be a fresh
     // upload (see assertFreshUpload).
-    for (const storageId of [args.logoStorageId, args.coverImageStorageId]) {
+    for (const storageId of new Set([
+      args.removeLogo ? undefined : args.logoStorageId,
+      args.removeCoverImage ? undefined : args.coverImageStorageId,
+    ])) {
       if (
         storageId &&
         storageId !== venue.logoStorageId &&
         storageId !== venue.coverImageStorageId
       ) {
-        await assertFreshUpload(ctx, storageId, { requireImage: true });
+        await assertFreshUpload(ctx, storageId, {
+          requireImage: true,
+          venueId: venue._id,
+          usage: "appearance",
+        });
       }
     }
     const patch: Record<string, unknown> = {};
